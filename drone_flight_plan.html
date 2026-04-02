@@ -1,0 +1,2891 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ドローン飛行計画書 作成ツール</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<style>
+:root {
+  --ink: #1a1a2e;
+  --ink-light: #4a4a6a;
+  --sky: #0077b6;
+  --sky-light: #caf0f8;
+  --sky-mid: #90e0ef;
+  --accent: #f77f00;
+  --surface: #f8f9fc;
+  --white: #ffffff;
+  --border: #dde3f0;
+  --success: #2d9d78;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,119,182,0.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'ヒラギノ角ゴ Pro W3', 'Hiragino Kaku Gothic Pro', 'ヒラギノ角ゴ ProN W3', 'Hiragino Kaku Gothic ProN', -apple-system, BlinkMacSystemFont, 'Yu Gothic', 'Meiryo', sans-serif;
+  background: #eef2fa;
+  color: var(--ink);
+  min-height: 100vh;
+  padding-bottom: 60px;
+}
+
+/* ── Header ── */
+header {
+  background: var(--sky);
+  color: white;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 16px rgba(0,119,182,0.3);
+}
+.header-inner {
+  max-width: 1060px;
+  margin: auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.header-icon {
+  width: 42px; height: 42px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+header h1 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+header p {
+  font-size: 0.73rem;
+  opacity: 0.8;
+  margin-top: 2px;
+  font-weight: 300;
+}
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.header-badge {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.70rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+.btn-cases {
+  background: rgba(255,255,255,0.18);
+  border: 1.5px solid rgba(255,255,255,0.4);
+  border-radius: 8px;
+  color: white;
+  padding: 7px 14px;
+  font-size: 0.80rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.btn-cases:hover { background: rgba(255,255,255,0.28); }
+
+/* current-case-bar */
+.current-case-bar {
+  background: linear-gradient(90deg, #004d7a, var(--sky));
+  color: white;
+  padding: 5px 24px;
+  font-size: 0.76rem;
+  display: flex; align-items: center; gap: 10px;
+}
+.current-case-bar.hidden { display: none; }
+.current-case-label { opacity: 0.8; }
+.current-case-name { font-weight: 700; }
+
+/* ── Layout ── */
+.container {
+  max-width: 1060px;
+  margin: 28px auto;
+  padding: 0 20px;
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  position: sticky;
+  top: 72px;
+  z-index: 10;
+}
+.progress-card {
+  background: white;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.progress-card h3 {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--ink-light);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.progress-steps { list-style: none; }
+.progress-steps li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  font-size: 0.80rem;
+  color: var(--ink-light);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+.progress-steps li:hover { background: var(--surface); }
+.progress-steps li.active { color: var(--sky); font-weight: 700; }
+.progress-steps li.done { color: var(--success); }
+.step-dot {
+  width: 21px; height: 21px;
+  border-radius: 50%;
+  background: var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.63rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: all 0.3s;
+}
+.active .step-dot { background: var(--sky); color: white; }
+.done .step-dot { background: var(--success); color: white; }
+
+.completion-bar {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.completion-bar label {
+  font-size: 0.73rem;
+  color: var(--ink-light);
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+.bar-track {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--sky), var(--sky-mid));
+  border-radius: 3px;
+  transition: width 0.5s ease;
+  width: 0%;
+}
+
+/* ── Main form ── */
+.main-form { min-width: 0; }
+
+/* ── Section cards ── */
+.section-card {
+  background: white;
+  border-radius: 16px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: box-shadow 0.3s;
+}
+.section-card:focus-within {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--sky-mid);
+}
+.section-header {
+  padding: 16px 22px 13px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, #f8faff 0%, white 100%);
+}
+.section-num {
+  width: 30px; height: 30px;
+  background: var(--sky);
+  color: white;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.83rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.section-header-text { flex: 1; min-width: 0; }
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.section-title {
+  font-size: 0.93rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.section-subtitle {
+  font-size: 0.70rem;
+  color: var(--ink-light);
+  margin-top: 2px;
+}
+.section-body { padding: 18px 22px; }
+
+/* ── Fields ── */
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.field-row.full { grid-template-columns: 1fr; }
+.field-row.trio { grid-template-columns: 1fr 1fr 1fr; }
+.field-group { display: flex; flex-direction: column; gap: 5px; }
+label.field-label {
+  font-size: 0.73rem;
+  font-weight: 700;
+  color: var(--ink-light);
+  letter-spacing: 0.04em;
+}
+label.field-label .req { color: var(--accent); margin-left: 2px; }
+
+input[type="text"],
+input[type="date"],
+input[type="time"],
+input[type="tel"],
+textarea,
+select {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 13px;
+  font-size: 0.87rem;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--sky);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0,119,182,0.10);
+}
+textarea { resize: vertical; min-height: 78px; line-height: 1.7; }
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234a4a6a' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  padding-right: 34px;
+}
+
+/* ── Checkboxes ── */
+.check-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-top: 4px;
+}
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.81rem;
+  color: var(--ink-light);
+  user-select: none;
+  background: var(--surface);
+}
+.check-item:hover { border-color: var(--sky-mid); background: var(--sky-light); }
+.check-item input[type="checkbox"] { display: none; }
+.check-item.checked {
+  border-color: var(--sky);
+  background: linear-gradient(135deg, var(--sky-light), white);
+  color: var(--sky);
+  font-weight: 500;
+}
+.check-icon {
+  width: 17px; height: 17px;
+  border: 2px solid var(--border);
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.checked .check-icon { background: var(--sky); border-color: var(--sky); color: white; }
+
+/* ── Date mode buttons ── */
+.date-mode-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 7px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.81rem;
+  font-weight: 600;
+  color: var(--ink-light);
+  cursor: pointer;
+  background: var(--surface);
+  transition: all 0.2s;
+  user-select: none;
+}
+.date-mode-btn:hover { border-color: var(--sky-mid); background: var(--sky-light); }
+.date-mode-btn.active { background: var(--sky); color: white; border-color: var(--sky); }
+
+/* ── Location / Drone rows ── */
+.location-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 10px;
+  padding: 13px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.2s;
+}
+.location-row:focus-within { border-color: var(--sky-mid); }
+.location-row-inner { display: flex; flex-direction: column; gap: 7px; }
+.location-row-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px;
+  background: var(--sky);
+  color: white;
+  border-radius: 50%;
+  font-size: 0.68rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+.btn-remove-row {
+  width: 27px; height: 27px;
+  border: 1.5px solid #f0b8b8;
+  border-radius: 7px;
+  background: #fff5f5;
+  color: #c0392b;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: background 0.2s;
+}
+.btn-remove-row:hover { background: #fce8e8; }
+.btn-add-row {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 13px;
+  border: 1.5px dashed var(--sky);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sky);
+  font-size: 0.79rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+.btn-add-row:hover { background: var(--sky-light); }
+.multi-date-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/* ── Preset button ── */
+.btn-preset-apply {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 11px;
+  background: linear-gradient(135deg, #e8f4fd, #d0eaf9);
+  border: 1.5px solid #90caf9;
+  border-radius: 20px;
+  color: #0055a0;
+  font-size: 0.73rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.btn-preset-apply:hover { background: linear-gradient(135deg,#d0eaf9,#b3d9f5); border-color: var(--sky); }
+
+/* ── Actions bar ── */
+.actions-bar {
+  background: white;
+  border-radius: 16px;
+  padding: 18px 22px;
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.btn {
+  border: none;
+  border-radius: 10px;
+  padding: 11px 20px;
+  font-size: 0.87rem;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.03em;
+  display: flex; align-items: center; gap: 7px;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #005f8a, var(--sky));
+  color: white;
+  box-shadow: 0 4px 14px rgba(0,119,182,0.4);
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,119,182,0.5); }
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1.5px solid var(--border);
+}
+.btn-secondary:hover { background: var(--border); }
+.btn-accent {
+  background: linear-gradient(135deg, #c45e00, var(--accent));
+  color: white;
+  box-shadow: 0 4px 14px rgba(247,127,0,0.35);
+}
+.btn-accent:hover { transform: translateY(-1px); }
+
+/* ── Preview modal ── */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(10,10,30,0.65);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: white;
+  border-radius: 20px;
+  max-width: 720px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+.modal-header {
+  padding: 18px 22px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.modal-header h2 { font-size: 1.02rem; font-weight: 700; }
+.modal-close {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: white;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  transition: background 0.2s;
+}
+.modal-close:hover { background: var(--surface); }
+.modal-body { overflow-y: auto; padding: 22px; flex: 1; }
+
+/* ── Preview doc ── */
+#preview-doc {
+  font-family: 'ヒラギノ角ゴ Pro W3', 'Hiragino Kaku Gothic Pro', 'ヒラギノ角ゴ ProN W3', 'Hiragino Kaku Gothic ProN', -apple-system, BlinkMacSystemFont, sans-serif;
+  max-width: 640px;
+  margin: auto;
+  font-size: 0.87rem;
+  line-height: 1.8;
+  color: #1a1a2e;
+}
+#preview-doc .doc-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-align: center;
+  border-bottom: 3px solid var(--sky);
+  padding-bottom: 11px;
+  margin-bottom: 4px;
+}
+#preview-doc .doc-company { text-align: center; font-size: 0.98rem; font-weight: 700; color: var(--sky); margin-bottom: 3px; }
+#preview-doc .doc-date { text-align: right; font-size: 0.80rem; color: var(--ink-light); margin-bottom: 20px; }
+#preview-doc .doc-section { margin-bottom: 18px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+#preview-doc .doc-section-title { background: var(--sky); color: white; font-weight: 700; padding: 6px 13px; font-size: 0.83rem; letter-spacing: 0.05em; }
+#preview-doc .doc-row { display: grid; grid-template-columns: 128px 1fr; border-bottom: 1px solid var(--border); }
+#preview-doc .doc-row:last-child { border-bottom: none; }
+#preview-doc .doc-key { background: #f4f7fb; padding: 7px 11px; font-weight: 700; font-size: 0.78rem; color: var(--ink-light); border-right: 1px solid var(--border); display: flex; align-items: center; }
+#preview-doc .doc-val { padding: 7px 11px; font-size: 0.80rem; }
+#preview-doc .doc-notice { background: #fff8f0; border: 1px solid #f7c78a; border-radius: 8px; padding: 11px 15px; font-size: 0.78rem; color: #7a4500; margin-top: 14px; }
+
+/* ── Case panel ── */
+.case-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(10,10,30,0.55);
+  backdrop-filter: blur(3px);
+  z-index: 2000;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+.case-overlay.open { display: flex; }
+.case-panel {
+  background: white;
+  width: 480px;
+  max-width: 95vw;
+  height: 100vh;
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 40px rgba(0,0,0,0.18);
+  animation: slideInRight 0.28s cubic-bezier(0.34,1.2,0.64,1);
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.case-panel-header {
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(135deg, #f0f6ff, white);
+  flex-shrink: 0;
+}
+.case-panel-header h2 { font-size: 1.02rem; font-weight: 700; }
+.case-panel-header p { font-size: 0.70rem; color: var(--ink-light); margin-top: 2px; }
+.case-search-bar {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex; gap: 9px;
+}
+.case-search-bar input {
+  flex: 1;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: 0.84rem;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--ink);
+}
+.case-search-bar input:focus { outline: none; border-color: var(--sky); background: white; box-shadow: 0 0 0 3px rgba(0,119,182,0.1); }
+.case-list { flex: 1; overflow-y: auto; padding: 11px 15px; }
+.case-empty { text-align: center; padding: 55px 20px; color: var(--ink-light); font-size: 0.84rem; line-height: 2; }
+.case-empty-icon { font-size: 2.4rem; margin-bottom: 10px; }
+.case-item {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 13px 15px;
+  margin-bottom: 9px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.case-item:hover { border-color: var(--sky-mid); background: white; box-shadow: 0 2px 12px rgba(0,119,182,0.1); transform: translateY(-1px); }
+.case-item.active-case { border-color: var(--sky); background: linear-gradient(135deg, #f0f8ff, white); }
+.case-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.case-item-name { font-weight: 700; font-size: 0.90rem; color: var(--ink); flex: 1; }
+.case-badge-current { display: inline-flex; align-items: center; background: var(--sky); color: white; font-size: 0.63rem; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin-left: 6px; letter-spacing: 0.04em; }
+.case-item-actions { display: flex; gap: 5px; flex-shrink: 0; }
+.case-action-btn {
+  width: 27px; height: 27px;
+  border-radius: 7px;
+  border: 1.5px solid var(--border);
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  color: var(--ink-light);
+}
+.case-action-btn:hover { background: var(--surface); border-color: var(--sky-mid); }
+.case-action-btn.danger:hover { background: #fff0f0; border-color: #f0b8b8; color: #c0392b; }
+.case-item-meta { margin-top: 5px; display: flex; gap: 10px; flex-wrap: wrap; }
+.case-meta-tag { font-size: 0.70rem; color: var(--ink-light); display: flex; align-items: center; gap: 4px; }
+.case-meta-tag.highlight { color: var(--sky); font-weight: 600; }
+.case-updated { font-size: 0.66rem; color: #aaa; margin-top: 4px; }
+.case-panel-footer { padding: 14px 18px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; font-size: 0.70rem; color: var(--ink-light); text-align: center; line-height: 1.7; }
+
+/* ── Preset modal ── */
+.preset-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(10,10,30,0.55);
+  backdrop-filter: blur(3px);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.preset-overlay.open { display: flex; }
+.preset-modal {
+  background: white;
+  border-radius: 20px;
+  width: 500px;
+  max-width: 96vw;
+  max-height: 85vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.22);
+  animation: fadeScaleIn 0.22s ease;
+}
+@keyframes fadeScaleIn {
+  from { opacity:0; transform: scale(0.95); }
+  to   { opacity:1; transform: scale(1); }
+}
+.preset-modal-header { padding: 17px 20px 13px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.preset-modal-header h3 { font-size: 0.98rem; font-weight: 700; }
+.preset-modal-header p { font-size: 0.70rem; color: var(--ink-light); margin-top: 2px; }
+.preset-modal-body { flex: 1; overflow-y: auto; padding: 14px 18px; }
+.preset-list-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 13px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 7px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.preset-list-item:hover { border-color: var(--sky-mid); background: white; }
+.preset-list-name { font-weight: 600; font-size: 0.87rem; }
+.preset-list-meta { font-size: 0.70rem; color: var(--ink-light); margin-top: 2px; }
+.preset-item-btns { display: flex; gap: 5px; flex-shrink: 0; }
+.preset-empty { text-align: center; padding: 38px 20px; color: var(--ink-light); font-size: 0.84rem; line-height: 2; }
+.preset-modal-footer { padding: 11px 18px; border-top: 1px solid var(--border); background: var(--surface); display: flex; gap: 9px; }
+
+/* ── Aircraft select modal ── */
+.aircraft-select-modal {
+  background: white;
+  border-radius: 16px;
+  width: 580px;
+  max-width: 96vw;
+  max-height: 85vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  animation: fadeScaleIn 0.22s ease;
+}
+.aircraft-select-list { flex: 1; overflow-y: auto; padding: 10px 18px; }
+.aircraft-check-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+.aircraft-check-item:hover { border-color: var(--sky-mid); background: white; }
+.aircraft-check-item.selected { border-color: var(--sky); background: #f0f8ff; }
+.aircraft-check-item input[type="checkbox"] {
+  width: 17px; height: 17px; flex-shrink: 0; accent-color: var(--sky); cursor: pointer;
+}
+.aircraft-check-name { font-weight: 600; font-size: 0.87rem; flex: 1; }
+.aircraft-check-reg  { font-size: 0.78rem; color: var(--ink-light); font-family: monospace; flex-shrink: 0; }
+.aircraft-select-toolbar {
+  display: flex; gap: 7px; padding: 10px 18px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.btn-select-all {
+  font-size: 0.78rem; padding: 4px 11px;
+  border: 1.5px solid var(--border); border-radius: 6px;
+  background: var(--surface); cursor: pointer; font-family: inherit;
+  color: var(--ink-light); transition: border-color 0.15s, color 0.15s;
+}
+.btn-select-all:hover { border-color: var(--sky); color: var(--sky); }
+.aircraft-select-count { font-size: 0.78rem; color: var(--ink-light); margin-left: auto; align-self: center; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 22px; right: 22px;
+  background: var(--success);
+  color: white;
+  padding: 13px 18px;
+  border-radius: 12px;
+  font-size: 0.87rem;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  transform: translateY(80px);
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  z-index: 3000;
+  display: flex; align-items: center; gap: 9px;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+/* ── Save / Preset-name modal ── */
+.save-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(10,10,30,0.65);
+  backdrop-filter: blur(4px);
+  z-index: 3100;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.save-overlay.open { display: flex; }
+.save-modal {
+  background: white;
+  border-radius: 16px;
+  width: 420px;
+  max-width: 96vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  overflow: hidden;
+  animation: fadeScaleIn 0.22s ease;
+}
+.save-modal-header {
+  padding: 16px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, #f0f6ff, white);
+}
+.save-modal-header h3 { font-size: 1rem; font-weight: 700; }
+.save-modal-body { padding: 18px 20px; }
+.save-name-input {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 13px;
+  font-size: 0.90rem;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.save-name-input:focus { outline: none; border-color: var(--sky); background: white; box-shadow: 0 0 0 3px rgba(0,119,182,0.10); }
+.save-modal-footer {
+  padding: 12px 20px;
+  display: flex; gap: 9px; justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+@media (max-width: 700px) {
+  .container { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .field-row, .field-row.trio { grid-template-columns: 1fr; }
+  .check-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <h1>ドローン飛行計画書 作成ツール</h1>
+      <p>フォームを入力してクライアント提出用PDFを即時作成</p>
+    </div>
+    <div class="header-right">
+      <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
+      <div class="header-badge">Ver. 3.14</div>
+    </div>
+  </div>
+</header>
+
+<div class="current-case-bar hidden" id="current-case-bar">
+  <span class="current-case-label">編集中：</span>
+  <span class="current-case-name" id="current-case-name"></span>
+</div>
+
+<div class="container">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="progress-card">
+      <h3>入力セクション</h3>
+      <ul class="progress-steps" id="progress-steps">
+        <li class="active" onclick="goTo('s1')"><span class="step-dot">1</span>基本情報</li>
+        <li onclick="goTo('s2')"><span class="step-dot">2</span>撮影概要</li>
+        <li onclick="goTo('s3')"><span class="step-dot">3</span>飛行日時・場所</li>
+        <li onclick="goTo('s4')"><span class="step-dot">4</span>航空法・法規</li>
+        <li onclick="goTo('s5')"><span class="step-dot">5</span>機体・操縦者</li>
+        <li onclick="goTo('s6')"><span class="step-dot">6</span>許可・申請</li>
+        <li onclick="goTo('s7')"><span class="step-dot">7</span>保険情報</li>
+        <li onclick="goTo('s8')"><span class="step-dot">8</span>緊急連絡体制</li>
+      </ul>
+      <div class="completion-bar">
+        <label><span>入力完了度</span><span id="pct-label">0%</span></label>
+        <div class="bar-track"><div class="bar-fill" id="bar-fill"></div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-form">
+
+    <!-- S1: 基本情報 -->
+    <div class="section-card" id="s1">
+      <div class="section-header">
+        <div class="section-num">1</div>
+        <div class="section-header-text">
+          <div class="section-title-row">
+            <div class="section-title">基本情報</div>
+            <button class="btn-preset-apply" onclick="openPresetModal('company_info')">📋 定型呼出</button>
+          </div>
+          <div class="section-subtitle">会社名・文書番号など</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">会社名・屋号 <span class="req">*</span></label>
+            <input type="text" id="company" placeholder="例：株式会社ドローンテック">
+          </div>
+          <div class="field-group">
+            <label class="field-label">文書作成日 <span class="req">*</span></label>
+            <input type="date" id="doc-date">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">文書番号</label>
+            <input type="text" id="doc-num" placeholder="例：FP-20260401-001">
+          </div>
+          <div class="field-group">
+            <label class="field-label">提出先・クライアント名</label>
+            <input type="text" id="client" placeholder="例：〇〇市役所">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S2: 撮影概要 -->
+    <div class="section-card" id="s2">
+      <div class="section-header">
+        <div class="section-num">2</div>
+        <div class="section-header-text">
+          <div class="section-title">撮影概要</div>
+          <div class="section-subtitle">目的・方法・対象物</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">撮影目的 <span class="req">*</span></label>
+            <select id="shoot-purpose">
+              <option value="">選択してください</option>
+              <option>空撮</option>
+              <option>物件従前撮影</option>
+              <option>建築・土木現場撮影</option>
+              <option>不動産広告撮影</option>
+              <option>点検・測量</option>
+              <option>イベント撮影</option>
+              <option>農業・農地撮影</option>
+              <option>その他</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">目的（補足・詳細）</label>
+            <input type="text" id="shoot-purpose-detail" placeholder="例：市PR動画用空撮">
+          </div>
+        </div>
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">撮影方法</label>
+            <div class="check-grid" id="shoot-method-checks">
+              <label class="check-item"><input type="checkbox" value="動画撮影"><span class="check-icon">✓</span>動画撮影</label>
+              <label class="check-item"><input type="checkbox" value="静止画撮影"><span class="check-icon">✓</span>静止画撮影</label>
+            </div>
+          </div>
+        </div>
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">その他の撮影方法（任意）</label>
+            <input type="text" id="shoot-method-other" placeholder="例：360°撮影、サーモグラフィ など">
+          </div>
+        </div>
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">撮影対象 <span class="req">*</span></label>
+            <input type="text" id="shoot-target" placeholder="例：〇〇県〇〇市〇〇町0-0-0 建物外観">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S3: 飛行日時・場所 -->
+    <div class="section-card" id="s3">
+      <div class="section-header">
+        <div class="section-num">3</div>
+        <div class="section-header-text">
+          <div class="section-title">飛行日時・場所</div>
+          <div class="section-subtitle">期間・複数地点・地図</div>
+        </div>
+      </div>
+      <div class="section-body">
+
+        <!-- 日程モード -->
+        <div class="field-row full" style="margin-bottom:10px;">
+          <div class="field-group">
+            <label class="field-label">飛行日程タイプ</label>
+            <div style="display:flex;gap:9px;margin-top:4px;">
+              <label class="date-mode-btn active" id="mode-single-lbl" onclick="setDateMode('single')">
+                <input type="radio" name="date-mode" value="single" checked style="display:none"> 単日
+              </label>
+              <label class="date-mode-btn" id="mode-range-lbl" onclick="setDateMode('range')">
+                <input type="radio" name="date-mode" value="range" style="display:none"> 期間（複数日）
+              </label>
+              <label class="date-mode-btn" id="mode-multi-lbl" onclick="setDateMode('multi')">
+                <input type="radio" name="date-mode" value="multi" style="display:none"> 指定複数日
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 単日 -->
+        <div id="date-single">
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">飛行予定日 <span class="req">*</span></label>
+              <input type="date" id="fly-date">
+            </div>
+            <div class="field-group">
+              <label class="field-label">予備日</label>
+              <input type="date" id="fly-backup">
+            </div>
+          </div>
+        </div>
+
+        <!-- 期間 -->
+        <div id="date-range" style="display:none;">
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">開始日 <span class="req">*</span></label>
+              <input type="date" id="fly-date-from">
+            </div>
+            <div class="field-group">
+              <label class="field-label">終了日 <span class="req">*</span></label>
+              <input type="date" id="fly-date-to">
+            </div>
+          </div>
+          <div class="field-row full">
+            <div class="field-group">
+              <label class="field-label">予備日</label>
+              <input type="date" id="fly-backup-range">
+            </div>
+          </div>
+        </div>
+
+        <!-- 指定複数日 -->
+        <div id="date-multi" style="display:none;">
+          <div id="multi-dates-list"></div>
+          <button type="button" class="btn-add-row" onclick="addMultiDate()">＋ 日付を追加</button>
+        </div>
+
+        <!-- 時刻・高度 -->
+        <div class="field-row" style="margin-top:4px;">
+          <div class="field-group">
+            <label class="field-label">開始時刻</label>
+            <input type="time" id="fly-start">
+          </div>
+          <div class="field-group">
+            <label class="field-label">終了時刻</label>
+            <input type="time" id="fly-end">
+          </div>
+        </div>
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">最大飛行高度</label>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:2px;">
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.88rem;font-weight:500;">
+                <input type="radio" name="fly-alt-type" id="fly-alt-type-ground" value="地表" checked style="accent-color:var(--sky);width:14px;height:14px;" onchange="syncAltSafetyCheck()">地表から
+              </label>
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.88rem;font-weight:500;">
+                <input type="radio" name="fly-alt-type" id="fly-alt-type-alt" value="標高" style="accent-color:var(--sky);width:14px;height:14px;" onchange="syncAltSafetyCheck()">標高
+              </label>
+              <input type="number" id="fly-alt-num" min="0" max="999" step="1" style="width:76px;" placeholder="150" oninput="syncAltSafetyCheck();updateProgress()">
+              <span style="font-size:0.88rem;color:var(--ink);">m未満</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 撮影地点リスト（各地点に地図付き） -->
+        <div style="margin-top:6px;">
+          <label class="field-label" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span>撮影地点 <span class="req">*</span></span>
+            <button type="button" class="btn-add-row" onclick="addLocation()" style="margin:0;">＋ 地点を追加</button>
+          </label>
+          <div id="locations-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S4: 航空法 -->
+    <div class="section-card" id="s4">
+      <div class="section-header">
+        <div class="section-num">4</div>
+        <div class="section-header-text">
+          <div class="section-title">航空法・法規関連事項</div>
+          <div class="section-subtitle">カテゴリー・飛行形態・安全対策</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">飛行カテゴリー <span class="req">*</span></label>
+            <select id="category">
+              <option value="">選択してください</option>
+              <option>カテゴリーⅠ（許可不要）</option>
+              <option>カテゴリーⅡA（包括申請）</option>
+              <option>カテゴリーⅡB（個別申請）</option>
+              <option>カテゴリーⅢ（個別許可必要）</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label">飛行形態（特定飛行・複数選択可）</label>
+            <div class="check-grid" id="fly-type-checks" style="margin-top:4px;">
+              <label class="check-item"><input type="checkbox" value="目視飛行"><span class="check-icon">✓</span>目視飛行</label>
+              <label class="check-item"><input type="checkbox" value="目視外飛行（FPV）"><span class="check-icon">✓</span>目視外飛行（FPV）</label>
+              <label class="check-item"><input type="checkbox" value="自動・自律飛行"><span class="check-icon">✓</span>自動・自律飛行</label>
+              <label class="check-item"><input type="checkbox" value="夜間飛行"><span class="check-icon">✓</span>夜間飛行</label>
+            </div>
+          </div>
+        </div>
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">該当する特定飛行条件</label>
+            <div class="check-grid" id="special-checks">
+              <label class="check-item"><input type="checkbox" value="人口集中地区上空"><span class="check-icon">✓</span>人口集中地区上空</label>
+              <label class="check-item"><input type="checkbox" value="30m未満飛行"><span class="check-icon">✓</span>人・物件から30m未満</label>
+              <label class="check-item"><input type="checkbox" value="夜間飛行"><span class="check-icon">✓</span>夜間飛行</label>
+              <label class="check-item"><input type="checkbox" value="危険物輸送"><span class="check-icon">✓</span>危険物輸送</label>
+              <label class="check-item"><input type="checkbox" value="催し上空"><span class="check-icon">✓</span>催し上空</label>
+              <label class="check-item"><input type="checkbox" value="物件投下"><span class="check-icon">✓</span>物件投下</label>
+            </div>
+          </div>
+        </div>
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">安全対策・飛行ルール</label>
+            <div class="check-grid" id="safety-checks" style="margin-top:4px;">
+              <label class="check-item" id="safety-alt-item"><input type="checkbox" id="safety-alt-cb" value="飛行高度は150m未満"><span class="check-icon">✓</span><span id="safety-alt-label">飛行高度は150m未満</span></label>
+              <label class="check-item"><input type="checkbox" value="第三者の頭上は飛ばさない"><span class="check-icon">✓</span>第三者の頭上は飛ばさない</label>
+              <label class="check-item"><input type="checkbox" value="バッテリー残量30%で帰還"><span class="check-icon">✓</span>バッテリー残量30%で帰還</label>
+              <label class="check-item"><input type="checkbox" value="補助員1名の監視体制で実施"><span class="check-icon">✓</span>補助員1名の監視体制</label>
+              <label class="check-item"><input type="checkbox" value="飛行前点検を実施"><span class="check-icon">✓</span>飛行前点検を実施</label>
+              <label class="check-item"><input type="checkbox" value="強風時は飛行中止"><span class="check-icon">✓</span>強風時は飛行中止</label>
+              <label class="check-item"><input type="checkbox" value="飛行区域を立入禁止に設定"><span class="check-icon">✓</span>飛行区域を立入禁止に設定</label>
+              <label class="check-item"><input type="checkbox" value="他の交通の妨げとなる飛行は行わない"><span class="check-icon">✓</span>他の交通を妨げない</label>
+            </div>
+            <div style="margin-top:9px;">
+              <label class="field-label" style="margin-bottom:5px;display:block;">その他・補足事項（自由記入）</label>
+              <textarea id="safety-note" placeholder="例：関係者への事前連絡を実施済み、現場責任者立会いのもと飛行する" style="min-height:58px;"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S5: 機体・操縦者 -->
+    <div class="section-card" id="s5">
+      <div class="section-header">
+        <div class="section-num">5</div>
+        <div class="section-header-text">
+          <div class="section-title-row">
+            <div class="section-title">機体・操縦者情報</div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-preset-apply" onclick="openAircraftPdfPicker()">📄 機体一覧PDF読み込み</button>
+              <button class="btn-preset-apply" onclick="openPresetModal('pilot_info')">👤 操縦者定型</button>
+              <button class="btn-preset-apply" onclick="openPresetModal('drone_info')">🚁 機体定型</button>
+            </div>
+          </div>
+          <div class="section-subtitle">使用ドローン・クルー構成</div>
+          <input type="file" id="aircraft-pdf-input" accept=".pdf" style="display:none">
+        </div>
+      </div>
+      <div class="section-body">
+        <!-- 操縦者リスト -->
+        <div style="margin-bottom:16px;">
+          <label class="field-label" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span>操縦者 <span class="req">*</span></span>
+            <button type="button" class="btn-add-row" onclick="addPilot()" style="margin:0;">＋ 操縦者を追加</button>
+          </label>
+          <div id="pilots-list"></div>
+        </div>
+        <!-- 補助者 -->
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">補助者氏名</label>
+            <input type="text" id="assist-name" placeholder="例：田中 翼">
+          </div>
+        </div>
+        <!-- 機体リスト -->
+        <div style="margin-top:14px;">
+          <label class="field-label" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span>使用機体 <span class="req">*</span></span>
+            <button type="button" class="btn-add-row" onclick="addDrone()" style="margin:0;">＋ 機体を追加</button>
+          </label>
+          <div id="drones-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S6: 許可・申請 -->
+    <div class="section-card" id="s6">
+      <div class="section-header">
+        <div class="section-num">6</div>
+        <div class="section-header-text">
+          <div class="section-title-row">
+            <div class="section-title">許可・申請情報</div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-preset-apply" onclick="openPermitPdfPicker()">📄 許可書PDF読み込み</button>
+              <button class="btn-preset-apply" onclick="openPresetModal('permit_info')">📋 定型呼出</button>
+            </div>
+          </div>
+          <div class="section-subtitle">国交省許可番号・有効期間</div>
+          <input type="file" id="permit-pdf-input" accept=".pdf" multiple style="display:none">
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">許可番号</label>
+            <input type="text" id="permit-num" placeholder="例：〇〇空運航第00001号">
+          </div>
+        </div>
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">許可の種類</label>
+            <select id="permit-type" onchange="autoFillPermitEnd()">
+              <option value="">選択</option>
+              <option>包括申請（全国）</option>
+              <option>個別申請（特定場所）</option>
+              <option>登録なし（カテゴリーⅠ）</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">許可有効期限（開始）</label>
+            <input type="date" id="permit-start" onchange="autoFillPermitEnd()">
+          </div>
+          <div class="field-group">
+            <label class="field-label">許可有効期限（終了）</label>
+            <input type="date" id="permit-end">
+          </div>
+        </div>
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">飛行の経路・範囲</label>
+            <input type="text" id="permit-area" placeholder="例：日本全国（飛行マニュアルに基づく）">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S7: 保険 -->
+    <div class="section-card" id="s7">
+      <div class="section-header">
+        <div class="section-num">7</div>
+        <div class="section-header-text">
+          <div class="section-title-row">
+            <div class="section-title">保険情報</div>
+            <button class="btn-preset-apply" onclick="openPresetModal('insurance_info')">📋 定型呼出</button>
+          </div>
+          <div class="section-subtitle">賠償責任保険の詳細</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">保険会社・商品名</label>
+            <input type="text" id="ins-company" placeholder="例：〇〇損保「UAV賠償プラン」">
+          </div>
+          <div class="field-group">
+            <label class="field-label">証券番号</label>
+            <input type="text" id="ins-num" placeholder="例：AB12345678">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">保険有効期限</label>
+            <input type="date" id="ins-end">
+          </div>
+          <div class="field-group">
+            <label class="field-label">支払限度額（対人・対物）</label>
+            <select id="ins-amount">
+              <option value="">選択</option>
+              <option>10億円</option>
+              <option>5億円</option>
+              <option>1億円</option>
+              <option>5000万円</option>
+              <option>その他</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S8: 緊急連絡 -->
+    <div class="section-card" id="s8">
+      <div class="section-header">
+        <div class="section-num">8</div>
+        <div class="section-header-text">
+          <div class="section-title-row">
+            <div class="section-title">緊急連絡体制</div>
+            <button class="btn-preset-apply" onclick="openPresetModal('police_info')">📋 定型呼出</button>
+          </div>
+          <div class="section-subtitle">緊急時の連絡先・管轄警察署</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">主連絡先（会社名・担当者）</label>
+            <input type="text" id="contact-name" placeholder="例：株式会社ドローンテック 山本空">
+          </div>
+          <div class="field-group">
+            <label class="field-label">主連絡先 電話番号</label>
+            <input type="tel" id="contact-tel" placeholder="例：090-0000-1234">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">管轄警察署名</label>
+            <input type="text" id="police-name" placeholder="例：〇〇警察署">
+          </div>
+          <div class="field-group">
+            <label class="field-label">警察署 電話番号</label>
+            <input type="tel" id="police-tel" placeholder="例：00-0000-0000">
+          </div>
+        </div>
+        <div class="field-row full">
+          <div class="field-group">
+            <label class="field-label">その他の緊急連絡先・備考</label>
+            <textarea id="emergency-note" placeholder="例：〇〇航空局 連絡先"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action bar -->
+    <div class="actions-bar">
+      <button class="btn btn-secondary" onclick="resetForm()">🗑 リセット</button>
+      <button class="btn btn-secondary" onclick="openPreview()">👁 プレビュー</button>
+      <button class="btn btn-accent" onclick="saveCurrentCase()">💾 案件を保存</button>
+      <button class="btn btn-primary" onclick="generatePDF()">📄 PDF印刷出力</button>
+    </div>
+  </main>
+</div>
+
+<!-- Preview modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📋 計画書プレビュー</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="preview-doc"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 定型情報 modal -->
+<div class="preset-overlay" id="preset-overlay" onclick="handlePresetOverlayClick(event)">
+  <div class="preset-modal">
+    <div class="preset-modal-header">
+      <div>
+        <h3 id="preset-modal-title">定型情報を選択</h3>
+        <p id="preset-modal-sub">保存済みの定型情報を呼び出します</p>
+      </div>
+      <button class="modal-close" onclick="closePresetModal()">✕</button>
+    </div>
+    <div class="preset-modal-body" id="preset-modal-body"></div>
+    <div class="preset-modal-footer">
+      <button class="btn btn-primary" style="font-size:0.81rem;padding:8px 16px;" onclick="saveNewPreset()">＋ 現在の入力を定型保存</button>
+      <button class="btn btn-secondary" style="font-size:0.81rem;padding:8px 16px;" onclick="closePresetModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 案件管理パネル -->
+<div class="case-overlay" id="case-overlay" onclick="handleCaseOverlayClick(event)">
+  <div class="case-panel">
+    <div class="case-panel-header">
+      <div>
+        <h2>📁 案件管理</h2>
+        <p>案件を選択して編集、または新規作成</p>
+      </div>
+      <button class="modal-close" onclick="closeCasePanel()">✕</button>
+    </div>
+    <div class="case-search-bar">
+      <input type="text" id="case-search" placeholder="案件名・クライアントで検索..." oninput="renderCaseList()">
+      <button class="btn btn-primary" style="padding:7px 14px;font-size:0.81rem;" onclick="newCase()">＋ 新規作成</button>
+    </div>
+    <div class="case-list" id="case-list-container"></div>
+    <div class="case-panel-footer">
+      データはこのブラウザのみに保存されます。
+    </div>
+  </div>
+</div>
+
+<!-- 案件保存モーダル -->
+<div class="save-overlay" id="save-overlay">
+  <div class="save-modal">
+    <div class="save-modal-header">
+      <h3>案件を保存</h3>
+      <button class="modal-close" onclick="closeSaveModal()">✕</button>
+    </div>
+    <div class="save-modal-body">
+      <label class="field-label" style="display:block;margin-bottom:8px;">案件名</label>
+      <input type="text" id="save-case-name-input" class="save-name-input" placeholder="例：〇〇市役所 空撮">
+    </div>
+    <div class="save-modal-footer">
+      <button class="btn btn-primary" onclick="confirmSaveCase()">保存</button>
+      <button class="btn btn-secondary" onclick="closeSaveModal()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 定型名入力モーダル -->
+<div class="save-overlay" id="preset-name-overlay">
+  <div class="save-modal">
+    <div class="save-modal-header">
+      <h3>定型情報を保存</h3>
+      <button class="modal-close" onclick="closePresetNameModal()">✕</button>
+    </div>
+    <div class="save-modal-body">
+      <label class="field-label" style="display:block;margin-bottom:8px;">定型名</label>
+      <input type="text" id="preset-name-input" class="save-name-input" placeholder="例：〇〇会社 基本情報">
+    </div>
+    <div class="save-modal-footer">
+      <button class="btn btn-primary" onclick="confirmSavePreset()">保存</button>
+      <button class="btn btn-secondary" onclick="closePresetNameModal()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 機体選択モーダル -->
+<div class="save-overlay" id="aircraft-select-overlay">
+  <div class="aircraft-select-modal">
+    <div class="save-modal-header">
+      <h3>読み込む機体を選択</h3>
+      <button class="modal-close" onclick="closeAircraftSelectModal()">✕</button>
+    </div>
+    <div class="aircraft-select-toolbar">
+      <button class="btn-select-all" onclick="toggleAllAircraftSelect(true)">全選択</button>
+      <button class="btn-select-all" onclick="toggleAllAircraftSelect(false)">全解除</button>
+      <span class="aircraft-select-count" id="aircraft-select-count"></span>
+    </div>
+    <div class="aircraft-select-list" id="aircraft-select-list"></div>
+    <div class="save-modal-footer">
+      <button class="btn btn-primary" onclick="confirmAircraftSelect()">読み込む</button>
+      <button class="btn btn-secondary" onclick="closeAircraftSelectModal()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 機体PDF読み込み 置き換え/追加 確認モーダル -->
+<div class="save-overlay" id="pdf-drone-overlay">
+  <div class="save-modal">
+    <div class="save-modal-header">
+      <h3>機体情報の読み込み</h3>
+      <button class="modal-close" onclick="cancelPdfDrones()">✕</button>
+    </div>
+    <div class="save-modal-body">
+      <p id="pdf-drone-msg" style="font-size:0.88rem;color:var(--ink);line-height:1.6;"></p>
+    </div>
+    <div class="save-modal-footer">
+      <button class="btn btn-primary" onclick="applyPdfDrones('replace')">置き換え</button>
+      <button class="btn btn-secondary" onclick="applyPdfDrones('append')">追加</button>
+      <button class="btn btn-secondary" onclick="cancelPdfDrones()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">✅ <span id="toast-msg"></span></div>
+
+<script>
+
+// ══════════════════════════════════════════════════════════
+//  ユーティリティ
+// ══════════════════════════════════════════════════════════
+function val(id) { return (document.getElementById(id)?.value || '').trim(); }
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) { return String(s || '').replace(/"/g,'&quot;'); }
+
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  if (isNaN(dt)) return d;
+  return `${dt.getFullYear()}年${dt.getMonth()+1}月${dt.getDate()}日`;
+}
+
+function getChecked(containerId) {
+  const items = document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`);
+  const vals = Array.from(items).map(i => i.value);
+  if (containerId === 'shoot-method-checks') {
+    const other = val('shoot-method-other');
+    if (other) vals.push(other);
+  }
+  return vals.join('、') || '—';
+}
+
+function goTo(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+function showToast(msg, color) {
+  const t = document.getElementById('toast');
+  t.style.background = color || 'var(--success)';
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function generateDocNum() {
+  const d = new Date();
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  const seq = String(Math.floor(Math.random()*900)+100);
+  return `FP${yy}${mm}${dd}-${seq}`;
+}
+
+// ══════════════════════════════════════════════════════════
+//  包括申請 → 終了日自動入力
+// ══════════════════════════════════════════════════════════
+function autoFillPermitEnd() {
+  const type = val('permit-type');
+  const start = document.getElementById('permit-start')?.value;
+  if (!start) return;
+  if (type.includes('包括申請')) {
+    const d = new Date(start + 'T00:00:00');
+    d.setFullYear(d.getFullYear() + 1);
+    d.setDate(d.getDate() - 1);
+    const pad = n => String(n).padStart(2,'0');
+    document.getElementById('permit-end').value =
+      `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  日程モード
+// ══════════════════════════════════════════════════════════
+let currentDateMode = 'single';
+
+function setDateMode(mode) {
+  currentDateMode = mode;
+  ['single','range','multi'].forEach(m => {
+    document.getElementById('date-' + m).style.display = m === mode ? '' : 'none';
+    document.getElementById('mode-' + m + '-lbl').classList.toggle('active', m === mode);
+  });
+  if (mode === 'multi' && document.getElementById('multi-dates-list').children.length === 0) {
+    addMultiDate();
+  }
+  updateProgress();
+}
+
+function addMultiDate() {
+  const list = document.getElementById('multi-dates-list');
+  const row = document.createElement('div');
+  row.className = 'multi-date-row';
+  row.innerHTML = `<input type="date" class="multi-date-input" onchange="updateProgress()">
+    <button type="button" class="btn-remove-row" onclick="this.closest('.multi-date-row').remove();updateProgress()">✕</button>`;
+  list.appendChild(row);
+}
+
+function getFlyDateStr() {
+  if (currentDateMode === 'single') {
+    return val('fly-date') ? fmtDate(val('fly-date')) : '—';
+  } else if (currentDateMode === 'range') {
+    const f = document.getElementById('fly-date-from')?.value;
+    const t = document.getElementById('fly-date-to')?.value;
+    if (!f && !t) return '—';
+    const fd = f ? new Date(f+'T00:00:00') : null;
+    const td = t ? new Date(t+'T00:00:00') : null;
+    const fmt = dt => dt ? `${dt.getMonth()+1}月${dt.getDate()}日` : '?';
+    if (fd && td) return `${fd.getFullYear()}年${fmt(fd)}〜${fmt(td)}`;
+    return f ? fmtDate(f) : fmtDate(t);
+  } else {
+    const dates = Array.from(document.querySelectorAll('.multi-date-input')).map(i => i.value).filter(Boolean);
+    if (!dates.length) return '—';
+    return dates.map(d => { const dt = new Date(d+'T00:00:00'); return `${dt.getMonth()+1}月${dt.getDate()}日`; }).join('、');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  撮影地点
+// ══════════════════════════════════════════════════════════
+let locationCount = 0;
+
+function addLocation(name='', addr='', note='') {
+  locationCount++;
+  const list = document.getElementById('locations-list');
+  const idx = list.children.length + 1;
+  const mapId = 'loc-map-' + Date.now() + '-' + locationCount;
+  const row = document.createElement('div');
+  row.className = 'location-row';
+  row.dataset.mapId = mapId;
+  row.innerHTML = `
+    <div class="location-row-inner">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="location-row-num">${idx}</span>
+        <input type="text" class="loc-name" placeholder="地点名　例：〇〇公園 北口" value="${escAttr(name)}" onchange="updateProgress()" style="flex:1;font-weight:600;">
+      </div>
+      <input type="text" class="loc-addr" placeholder="住所　例：〇〇県〇〇市〇〇町0-0-0" value="${escAttr(addr)}" oninput="debouncedGeocode(this)" onchange="updateProgress()">
+      <input type="text" class="loc-note" placeholder="補足（任意）　例：駐車場側から北向きに離陸" value="${escAttr(note)}" onchange="updateProgress()">
+      <div style="margin-top:8px;position:relative;z-index:0;border-radius:8px;overflow:hidden;border:1.5px solid var(--border);">
+        <div id="${mapId}" style="width:100%;height:220px;background:#e8edf4;"></div>
+      </div>
+      <div style="font-size:0.68rem;color:var(--ink-light);margin-top:3px;text-align:right;">地図提供：<a href="https://maps.gsi.go.jp/" target="_blank" style="color:var(--sky);">国土地理院</a>　© 国土地理院</div>
+    </div>
+    <button type="button" class="btn-remove-row" onclick="removeLocation(this)" title="削除">✕</button>`;
+  list.appendChild(row);
+  renumberLocations();
+  updateProgress();
+  setTimeout(() => initLocationMap(mapId, addr, idx), 150);
+}
+
+function removeLocation(btn) {
+  const row = btn.closest('.location-row');
+  const mapId = row.dataset.mapId;
+  if (mapId && locationMaps[mapId]) {
+    clearTimeout(geocodeTimers[mapId]);
+    try { locationMaps[mapId].map.remove(); } catch(e) {}
+    delete locationMaps[mapId];
+    delete geocodeTimers[mapId];
+  }
+  row.remove();
+  renumberLocations();
+  updateProgress();
+}
+
+function renumberLocations() {
+  document.querySelectorAll('#locations-list .location-row').forEach((row, i) => {
+    const num = row.querySelector('.location-row-num');
+    if (num) num.textContent = i + 1;
+  });
+}
+
+function getLocations() {
+  return Array.from(document.querySelectorAll('#locations-list .location-row')).map((row, i) => ({
+    num: i + 1,
+    name: row.querySelector('.loc-name')?.value.trim() || '',
+    addr: row.querySelector('.loc-addr')?.value.trim() || '',
+    note: row.querySelector('.loc-note')?.value.trim() || ''
+  }));
+}
+
+// ══════════════════════════════════════════════════════════
+//  操縦者リスト
+// ══════════════════════════════════════════════════════════
+let pilotCount = 0;
+
+function addPilot(name='', cert='', tel='') {
+  pilotCount++;
+  const list = document.getElementById('pilots-list');
+  const idx = list.children.length + 1;
+  const row = document.createElement('div');
+  row.className = 'location-row';
+  row.innerHTML = `
+    <div class="location-row-inner">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="location-row-num">${idx}</span>
+        <input type="text" class="pilot-name" placeholder="氏名　例：山本 空（やまもと そら）" value="${escAttr(name)}" onchange="updateProgress()" style="flex:1;font-weight:600;">
+      </div>
+      <input type="text" class="pilot-cert" placeholder="技能証明書番号　例：2024-1234567890" value="${escAttr(cert)}">
+      <input type="tel" class="pilot-tel" placeholder="連絡先　例：090-0000-1234" value="${escAttr(tel)}">
+    </div>
+    <button type="button" class="btn-remove-row" onclick="this.closest('.location-row').remove();renumberPilots();updateProgress();">✕</button>`;
+  list.appendChild(row);
+  renumberPilots();
+  updateProgress();
+}
+
+function renumberPilots() {
+  document.querySelectorAll('#pilots-list .location-row').forEach((row, i) => {
+    const num = row.querySelector('.location-row-num');
+    if (num) num.textContent = i + 1;
+  });
+}
+
+function getPilots() {
+  return Array.from(document.querySelectorAll('#pilots-list .location-row')).map(row => ({
+    name: row.querySelector('.pilot-name')?.value.trim() || '',
+    cert: row.querySelector('.pilot-cert')?.value.trim() || '',
+    tel:  row.querySelector('.pilot-tel')?.value.trim()  || ''
+  }));
+}
+
+// ══════════════════════════════════════════════════════════
+//  使用機体
+// ══════════════════════════════════════════════════════════
+let droneCount = 0;
+
+function addDrone(model='', reg='', memo='') {
+  droneCount++;
+  const list = document.getElementById('drones-list');
+  const idx = list.children.length + 1;
+  const row = document.createElement('div');
+  row.className = 'location-row';
+  row.innerHTML = `
+    <div class="location-row-inner">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="location-row-num">${idx}</span>
+        <input type="text" class="drone-model" placeholder="機種名　例：〇〇メーカー UAV-X1" value="${escAttr(model)}" onchange="updateProgress()" style="flex:1;font-weight:600;">
+      </div>
+      <input type="text" class="drone-reg" placeholder="登録記号（JU番号）　例：JU12345ABCDE" value="${escAttr(reg)}">
+      <input type="text" class="drone-memo" placeholder="備考（任意）　例：予備機" value="${escAttr(memo)}">
+    </div>
+    <button type="button" class="btn-remove-row" onclick="this.closest('.location-row').remove();renumberDrones();updateProgress();" title="削除">✕</button>`;
+  list.appendChild(row);
+  renumberDrones();
+  updateProgress();
+}
+
+function renumberDrones() {
+  document.querySelectorAll('#drones-list .location-row').forEach((row, i) => {
+    const num = row.querySelector('.location-row-num');
+    if (num) num.textContent = i + 1;
+  });
+}
+
+function getDrones() {
+  return Array.from(document.querySelectorAll('#drones-list .location-row')).map(row => ({
+    model: row.querySelector('.drone-model')?.value.trim() || '',
+    reg:   row.querySelector('.drone-reg')?.value.trim()   || '',
+    memo:  row.querySelector('.drone-memo')?.value.trim()  || ''
+  }));
+}
+
+// ══════════════════════════════════════════════════════════
+//  GSI地図 (Leaflet + 国土地理院タイル) — 1地点1地図方式
+// ══════════════════════════════════════════════════════════
+let locationMaps = {}; // mapId → { map, marker, coords }
+let geocodeTimers = {};
+
+function _fixLeafletZIndex(map) {
+  ['tilePane','overlayPane','shadowPane','markerPane','tooltipPane','popupPane'].forEach(p => {
+    const el = map.getPane(p);
+    if (el) el.style.zIndex = String(parseInt(el.style.zIndex || '200'));
+  });
+  map.getContainer().style.zIndex = '0';
+}
+
+function initLocationMap(mapId, addr, num) {
+  if (!document.getElementById(mapId)) return;
+  if (locationMaps[mapId]) return;
+  const map = L.map(mapId, { zoomControl: true, attributionControl: false })
+    .setView([35.6812, 139.7671], 10);
+  L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+  _fixLeafletZIndex(map);
+  locationMaps[mapId] = { map, marker: null, coords: null };
+  if (addr) geocodeLocationMap(mapId, addr, num);
+}
+
+function geocodeLocationMap(mapId, addr, num) {
+  const entry = locationMaps[mapId];
+  if (!entry) return;
+  if (!addr) {
+    if (entry.marker) { entry.marker.remove(); entry.marker = null; }
+    entry.coords = null;
+    return;
+  }
+  fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(addr)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data || !data.length) return;
+      const [lng, lat] = data[0].geometry.coordinates;
+      if (entry.marker) entry.marker.remove();
+      entry.marker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="background:#0077b6;color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:13px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${num}</div>`,
+          iconSize: [28,28], iconAnchor: [14,14]
+        })
+      }).addTo(entry.map);
+      entry.map.setView([lat, lng], 16);
+      entry.coords = [lat, lng];
+    }).catch(() => {});
+}
+
+function clearLocationMaps() {
+  Object.values(locationMaps).forEach(entry => {
+    try { entry.map.remove(); } catch(e) {}
+  });
+  locationMaps = {};
+  geocodeTimers = {};
+}
+
+function debouncedGeocode(input) {
+  const row = input ? input.closest('.location-row') : null;
+  const mapId = row ? row.dataset.mapId : null;
+  if (!mapId) return;
+  clearTimeout(geocodeTimers[mapId]);
+  geocodeTimers[mapId] = setTimeout(() => {
+    const addr = (input.value || '').trim();
+    const rows = Array.from(document.querySelectorAll('#locations-list .location-row'));
+    const num = rows.indexOf(row) + 1;
+    if (!locationMaps[mapId]) {
+      initLocationMap(mapId, addr, num);
+    } else {
+      geocodeLocationMap(mapId, addr, num);
+    }
+  }, 800);
+}
+
+// ══════════════════════════════════════════════════════════
+//  チェックボックス
+// ══════════════════════════════════════════════════════════
+document.querySelectorAll('.check-item').forEach(label => {
+  label.addEventListener('click', () => {
+    const cb = label.querySelector('input[type="checkbox"]');
+    cb.checked = !cb.checked;
+    label.classList.toggle('checked', cb.checked);
+    updateProgress();
+  });
+});
+
+// ══════════════════════════════════════════════════════════
+//  飛行高度と安全対策チェックの連動
+// ══════════════════════════════════════════════════════════
+function syncAltSafetyCheck() {
+  const num    = (document.getElementById('fly-alt-num')?.value || '').trim();
+  const altEl  = document.getElementById('fly-alt-type-alt');
+  const type   = (altEl && altEl.checked) ? '標高' : '地表';
+  const text = num ? `飛行高度は${type}から${num}m未満` : '飛行高度は地表から150m未満';
+  const cb   = document.getElementById('safety-alt-cb');
+  const lbl  = document.getElementById('safety-alt-label');
+  if (cb)  cb.value       = text;
+  if (lbl) lbl.textContent = text;
+}
+
+// ══════════════════════════════════════════════════════════
+//  進捗バー
+// ══════════════════════════════════════════════════════════
+const REQUIRED_IDS = ['company','doc-date','shoot-purpose','shoot-target','category'];
+
+function updateProgress() {
+  let filled = 0;
+  REQUIRED_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.value.trim()) filled++;
+  });
+  // 飛行日程：日程モードに応じた判定
+  if (currentDateMode === 'single') {
+    if (val('fly-date')) filled++;
+  } else if (currentDateMode === 'range') {
+    if (val('fly-date-from') && val('fly-date-to')) filled++;
+  } else {
+    if (Array.from(document.querySelectorAll('.multi-date-input')).some(i => i.value)) filled++;
+  }
+  if (getLocations().some(l => l.addr)) filled++;
+  if (getPilots().some(p => p.name)) filled++;
+  if (getDrones().some(d => d.model)) filled++;
+  const total = REQUIRED_IDS.length + 4; // 固定5 + 日程1 + 地点1 + 操縦者1 + 機体1 = 9
+  const pct = Math.round((filled / total) * 100);
+  document.getElementById('bar-fill').style.width = pct + '%';
+  document.getElementById('pct-label').textContent = pct + '%';
+}
+
+document.querySelectorAll('input,select,textarea').forEach(el => {
+  if (el.closest('#save-overlay') || el.closest('#preset-name-overlay') ||
+      el.closest('#case-overlay') || el.closest('#modal-overlay') || el.closest('#preset-overlay')) return;
+  el.addEventListener('input', updateProgress);
+  el.addEventListener('change', updateProgress);
+});
+
+// ══════════════════════════════════════════════════════════
+//  案件管理 (Case Management)
+// ══════════════════════════════════════════════════════════
+const CASES_KEY = 'drone_cases_v1';
+let currentCaseId = null;
+
+function loadCases() {
+  try { return JSON.parse(localStorage.getItem(CASES_KEY) || '{}'); }
+  catch(e) { return {}; }
+}
+function saveCases(cases) {
+  localStorage.setItem(CASES_KEY, JSON.stringify(cases));
+}
+
+// フォームデータ収集
+function collectFormData() {
+  const data = {};
+  document.querySelectorAll('input[id], select[id], textarea[id]').forEach(el => {
+    if (!el.id) return;
+    if (el.closest('#case-overlay') || el.closest('#modal-overlay') || el.closest('#preset-overlay') ||
+        el.closest('#save-overlay') || el.closest('#preset-name-overlay')) return;
+    if (el.type === 'checkbox') data['cb__' + el.id] = el.checked;
+    else if (el.type === 'radio') { if (el.checked) data['rad__' + el.name] = el.value; }
+    else data[el.id] = el.value;
+  });
+  // check-item checkboxes (value-based)
+  document.querySelectorAll('.check-item input[type="checkbox"]').forEach(cb => {
+    const key = 'cbval__' + cb.value;
+    data[key] = cb.checked;
+  });
+  data['__dateMode'] = currentDateMode;
+  data['__multiDates'] = Array.from(document.querySelectorAll('.multi-date-input')).map(i => i.value);
+  data['__locations'] = getLocations();
+  data['__drones'] = getDrones();
+  data['__pilots'] = getPilots();
+  return data;
+}
+
+// フォームデータ復元
+function restoreFormData(data) {
+  if (!data) return;
+  // Simple fields
+  Object.entries(data).forEach(([k, v]) => {
+    if (k.startsWith('__') || k.startsWith('cbval__') || k.startsWith('cb__') || k.startsWith('rad__')) return;
+    const el = document.getElementById(k);
+    if (el && el.type !== 'checkbox' && el.type !== 'radio') el.value = v;
+  });
+  // Radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(rb => {
+    if (!rb.name) return;
+    if (rb.closest('#case-overlay') || rb.closest('#modal-overlay') || rb.closest('#preset-overlay') ||
+        rb.closest('#save-overlay') || rb.closest('#preset-name-overlay')) return;
+    const key = 'rad__' + rb.name;
+    if (key in data) rb.checked = (rb.value === data[key]);
+  });
+  // fly-alt-type ラジオを ID 指定で確実に復元
+  if ('rad__fly-alt-type' in data) {
+    const gnd = document.getElementById('fly-alt-type-ground');
+    const alt = document.getElementById('fly-alt-type-alt');
+    if (gnd) gnd.checked = (data['rad__fly-alt-type'] === '地表');
+    if (alt) alt.checked = (data['rad__fly-alt-type'] === '標高');
+  }
+  // 高度ラジオ復元後にチェックラベルを同期
+  syncAltSafetyCheck();
+  // value-based checkboxes
+  document.querySelectorAll('.check-item input[type="checkbox"]').forEach(cb => {
+    const key = 'cbval__' + cb.value;
+    if (key in data) {
+      cb.checked = data[key];
+      cb.closest('.check-item')?.classList.toggle('checked', data[key]);
+    }
+  });
+  // Date mode
+  if (data['__dateMode']) setDateMode(data['__dateMode']);
+  // Multi-dates
+  if (data['__multiDates'] && data['__dateMode'] === 'multi') {
+    const list = document.getElementById('multi-dates-list');
+    list.innerHTML = '';
+    data['__multiDates'].forEach(d => {
+      addMultiDate();
+      const inputs = list.querySelectorAll('.multi-date-input');
+      inputs[inputs.length - 1].value = d;
+    });
+  }
+  // Locations
+  const locList = document.getElementById('locations-list');
+  clearLocationMaps();
+  locList.innerHTML = ''; locationCount = 0;
+  if (data['__locations'] && data['__locations'].length > 0) {
+    data['__locations'].forEach(l => addLocation(l.name||'', l.addr||'', l.note||''));
+  } else {
+    addLocation();
+  }
+  // Drones
+  const droneList = document.getElementById('drones-list');
+  droneList.innerHTML = ''; droneCount = 0;
+  if (data['__drones'] && data['__drones'].length > 0) {
+    data['__drones'].forEach(d => addDrone(d.model||'', d.reg||'', d.memo||''));
+  } else {
+    addDrone();
+  }
+  // Pilots
+  const pilotList = document.getElementById('pilots-list');
+  pilotList.innerHTML = ''; pilotCount = 0;
+  if (data['__pilots'] && data['__pilots'].length > 0) {
+    data['__pilots'].forEach(p => addPilot(p.name||'', p.cert||'', p.tel||''));
+  } else {
+    addPilot();
+  }
+  updateProgress();
+}
+
+function getCaseDisplayName(c) {
+  return c.name || c.client || c.location || '（名称未設定）';
+}
+
+// 案件一覧レンダリング
+function renderCaseList() {
+  const cases = loadCases();
+  const q = (document.getElementById('case-search')?.value || '').toLowerCase();
+  const container = document.getElementById('case-list-container');
+  const list = Object.values(cases)
+    .filter(c => !q || [c.name, c.client, c.location, c.purpose].some(s => (s||'').toLowerCase().includes(q)))
+    .sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
+
+  container.innerHTML = '';
+
+  if (list.length === 0) {
+    container.innerHTML = `<div class="case-empty">
+      <div class="case-empty-icon">📋</div>
+      ${q ? '検索結果がありません' : '保存された案件はありません<br><br>フォームを入力して<br>「案件を保存」で登録できます'}
+    </div>`;
+    return;
+  }
+
+  list.forEach(function(c) {
+    var cid = c.id;
+    var isCurrent = cid === currentCaseId;
+    var name = getCaseDisplayName(c);
+    var updated = c.updatedAt ? new Date(c.updatedAt).toLocaleString('ja-JP', {
+      year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'
+    }) : '';
+    var metaTags = [
+      c.client   ? `<span class="case-meta-tag highlight">👤 ${escHtml(c.client)}</span>`  : '',
+      c.location ? `<span class="case-meta-tag">📍 ${escHtml(c.location)}</span>`          : '',
+      c.flyDate  ? `<span class="case-meta-tag">📅 ${escHtml(c.flyDate)}</span>`            : '',
+      c.purpose  ? `<span class="case-meta-tag">🎯 ${escHtml(c.purpose)}</span>`            : ''
+    ].join('');
+
+    var item = document.createElement('div');
+    item.className = 'case-item' + (isCurrent ? ' active-case' : '');
+    item.innerHTML =
+      `<div class="case-item-header">` +
+        `<div class="case-item-name">${escHtml(name)}${isCurrent ? '<span class="case-badge-current">編集中</span>' : ''}</div>` +
+        `<div class="case-item-actions">` +
+          `<button class="case-action-btn _dup" title="複製">⧉</button>` +
+          `<button class="case-action-btn danger _del" title="削除">🗑</button>` +
+        `</div>` +
+      `</div>` +
+      `<div class="case-item-meta">${metaTags}</div>` +
+      (updated ? `<div class="case-updated">最終更新：${updated}</div>` : '');
+
+    item.querySelector('._dup').addEventListener('click', function(e) { e.stopPropagation(); duplicateCase(cid); });
+    item.querySelector('._del').addEventListener('click', function(e) { e.stopPropagation(); deleteCase(cid); });
+    item.addEventListener('click', function() { loadCase(cid); });
+
+    container.appendChild(item);
+  });
+}
+
+function openCasePanel() { renderCaseList(); document.getElementById('case-overlay').classList.add('open'); }
+function closeCasePanel() { document.getElementById('case-overlay').classList.remove('open'); }
+function handleCaseOverlayClick(e) { if (e.target === document.getElementById('case-overlay')) closeCasePanel(); }
+
+// 新規作成
+function newCase() {
+  currentCaseId = 'case_' + Date.now();
+  clearFormSilent();
+  updateCaseBar();
+  closeCasePanel();
+  showToast('新規案件を作成しました');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 案件を開く
+function loadCase(id) {
+  const cases = loadCases();
+  const c = cases[id];
+  if (!c) return;
+  currentCaseId = id;
+  restoreFormData(c.formData);
+  updateCaseBar();
+  closeCasePanel();
+  showToast(`「${getCaseDisplayName(c)}」を開きました`);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 保存
+function saveCurrentCase() {
+  if (!currentCaseId) currentCaseId = 'case_' + Date.now();
+  const cases = loadCases();
+  const existing = cases[currentCaseId];
+  const suggested = [val('client'), val('shoot-target')].filter(Boolean).join(' / ').slice(0,50) || '新規案件';
+  const defaultName = existing?.name || suggested;
+  document.getElementById('save-case-name-input').value = defaultName;
+  document.getElementById('save-overlay').classList.add('open');
+  setTimeout(() => { const inp = document.getElementById('save-case-name-input'); inp.focus(); inp.select(); }, 50);
+}
+
+function closeSaveModal() {
+  document.getElementById('save-overlay').classList.remove('open');
+}
+
+function confirmSaveCase() {
+  const nameInput = document.getElementById('save-case-name-input').value.trim();
+  const cases = loadCases();
+  const existing = cases[currentCaseId];
+  const suggested = [val('client'), val('shoot-target')].filter(Boolean).join(' / ').slice(0,50) || '新規案件';
+  const name = nameInput || existing?.name || suggested;
+  const formData = collectFormData();
+  const locs = getLocations();
+  const summary = {
+    id: currentCaseId,
+    name,
+    client: val('client').slice(0,30),
+    location: (locs[0]?.addr || '').slice(0,30),
+    flyDate: val('fly-date') ? (() => { const d = new Date(val('fly-date')+'T00:00:00'); return `${d.getMonth()+1}/${d.getDate()}`; })() : '',
+    purpose: val('shoot-purpose').slice(0,20),
+    updatedAt: Date.now(),
+    formData
+  };
+  cases[currentCaseId] = summary;
+  saveCases(cases);
+  updateCaseBar();
+  renderCaseList();
+  closeSaveModal();
+  showToast(`「${name}」を保存しました`);
+}
+
+// 複製
+function duplicateCase(id) {
+  const cases = loadCases();
+  const orig = cases[id];
+  if (!orig) return;
+  const newId = 'case_' + Date.now();
+  const copy = JSON.parse(JSON.stringify(orig));
+  copy.id = newId;
+  copy.name = copy.name + '（コピー）';
+  copy.updatedAt = Date.now();
+  if (copy.formData) copy.formData['doc-num'] = generateDocNum();
+  cases[newId] = copy;
+  saveCases(cases);
+  renderCaseList();
+  showToast(`「${copy.name}」として複製しました`);
+}
+
+// 削除
+function deleteCase(id) {
+  const cases = loadCases();
+  const c = cases[id];
+  if (!c) return;
+  delete cases[id];
+  saveCases(cases);
+  if (currentCaseId === id) { currentCaseId = null; updateCaseBar(); }
+  renderCaseList();
+  showToast('案件を削除しました');
+}
+
+// ヘッダ表示更新
+function updateCaseBar() {
+  const bar = document.getElementById('current-case-bar');
+  const nameEl = document.getElementById('current-case-name');
+  if (!currentCaseId) { bar.classList.add('hidden'); return; }
+  const cases = loadCases();
+  const c = cases[currentCaseId];
+  bar.classList.remove('hidden');
+  nameEl.textContent = c ? getCaseDisplayName(c) : '新規案件（未保存）';
+}
+
+
+// ══════════════════════════════════════════════════════════
+//  定型情報 (Preset)
+// ══════════════════════════════════════════════════════════
+const PRESET_FIELDS = {
+  company_info:   ['company', 'contact-name', 'contact-tel'],
+  pilot_info:     ['assist-name'],   // __pilots saved separately
+  drone_info:     [],                // __drones saved separately
+  permit_info:    ['permit-num', 'permit-type', 'permit-start', 'permit-end', 'permit-area', 'category'],
+  insurance_info: ['ins-company', 'ins-num', 'ins-end', 'ins-amount'],
+  police_info:    ['contact-name', 'contact-tel', 'emergency-note']
+};
+const PRESET_LABELS = {
+  company_info:   '会社・連絡先情報',
+  pilot_info:     '操縦者情報',
+  drone_info:     '機体情報',
+  permit_info:    '許可・申請情報',
+  insurance_info: '保険情報',
+  police_info:    '緊急連絡体制'
+};
+const PRESETS_KEY = 'drone_presets_v1';
+let currentPresetType = null;
+
+function loadPresets() {
+  try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || '{}'); }
+  catch(e) { return {}; }
+}
+function savePresets(p) { localStorage.setItem(PRESETS_KEY, JSON.stringify(p)); }
+
+function openPresetModal(type) {
+  currentPresetType = type;
+  document.getElementById('preset-modal-title').textContent = (PRESET_LABELS[type] || type) + ' — 定型呼出';
+  document.getElementById('preset-modal-sub').textContent = '保存済みの定型情報を選択してフォームに適用します';
+  renderPresetList();
+  document.getElementById('preset-overlay').classList.add('open');
+}
+function closePresetModal() {
+  document.getElementById('preset-overlay').classList.remove('open');
+  currentPresetType = null;
+}
+function handlePresetOverlayClick(e) {
+  if (e.target === document.getElementById('preset-overlay')) closePresetModal();
+}
+
+function renderPresetList() {
+  const presets = loadPresets();
+  const type = currentPresetType;
+  const items = Object.values(presets).filter(p => p.type === type).sort((a,b) => (b.updatedAt||0)-(a.updatedAt||0));
+  const body = document.getElementById('preset-modal-body');
+  if (items.length === 0) {
+    body.innerHTML = `<div class="preset-empty">
+      保存済みの定型情報はありません。<br>
+      フォームに入力後「現在の入力を定型保存」で登録できます。
+    </div>`;
+    return;
+  }
+  body.innerHTML = items.map(p => {
+    const meta = Object.entries(p.data||{}).filter(([k,v])=>v).slice(0,3).map(([k,v])=>String(v).slice(0,20)).join('　');
+    return `<div class="preset-list-item" onclick="applyPreset('${p.id}')">
+      <div>
+        <div class="preset-list-name">${escHtml(p.name)}</div>
+        <div class="preset-list-meta">${escHtml(meta)}</div>
+      </div>
+      <div class="preset-item-btns" onclick="event.stopPropagation()">
+        <button class="case-action-btn danger" onclick="deletePreset('${p.id}')" title="削除">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function applyPreset(id) {
+  const presets = loadPresets();
+  const p = presets[id];
+  if (!p || !p.data) return;
+  Object.entries(p.data).forEach(([k,v]) => {
+    if (k.startsWith('__')) return;
+    const el = document.getElementById(k);
+    if (el) el.value = v;
+  });
+  if (p.type === 'pilot_info' && p.data['__pilots']) {
+    const list = document.getElementById('pilots-list');
+    list.innerHTML = ''; pilotCount = 0;
+    p.data['__pilots'].forEach(pilot => addPilot(pilot.name||'', pilot.cert||'', pilot.tel||''));
+    if (list.children.length === 0) addPilot();
+  }
+  if (p.type === 'drone_info' && p.data['__drones']) {
+    const list = document.getElementById('drones-list');
+    list.innerHTML = ''; droneCount = 0;
+    p.data['__drones'].forEach(d => addDrone(d.model||'', d.reg||'', d.memo||''));
+    if (list.children.length === 0) addDrone();
+  }
+  if (p.type === 'permit_info') autoFillPermitEnd();
+  closePresetModal();
+  showToast(`「${p.name}」を適用しました`);
+}
+
+let _pendingPresetData = null;
+
+function saveNewPreset() {
+  const type = currentPresetType;
+  const fields = PRESET_FIELDS[type] || [];
+  const data = {};
+  fields.forEach(k => { const el = document.getElementById(k); if (el) data[k] = el.value; });
+  if (type === 'pilot_info') data['__pilots'] = getPilots();
+  if (type === 'drone_info') data['__drones'] = getDrones();
+  _pendingPresetData = { type, data };
+  const suggested = type === 'pilot_info'
+    ? (getPilots()[0]?.name || '新規定型').slice(0,30)
+    : type === 'drone_info'
+    ? (getDrones()[0]?.model || '新規定型').slice(0,30)
+    : Object.values(data).filter(v => v && !String(v).startsWith('['))[0]?.slice(0,30) || '新規定型';
+  document.getElementById('preset-name-input').value = suggested;
+  document.getElementById('preset-name-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('preset-name-input').select(), 50);
+}
+
+function closePresetNameModal() {
+  document.getElementById('preset-name-overlay').classList.remove('open');
+  _pendingPresetData = null;
+}
+
+function confirmSavePreset() {
+  if (!_pendingPresetData) return;
+  const nameInput = document.getElementById('preset-name-input').value.trim();
+  const { type, data } = _pendingPresetData;
+  const name = nameInput || '新規定型';
+  const presets = loadPresets();
+  const id = 'preset_' + Date.now();
+  presets[id] = { id, type, name, data, updatedAt: Date.now() };
+  savePresets(presets);
+  renderPresetList();
+  closePresetNameModal();
+  showToast(`「${name}」を定型保存しました`);
+}
+
+function deletePreset(id) {
+  const presets = loadPresets();
+  const p = presets[id];
+  if (!p) return;
+  delete presets[id];
+  savePresets(presets);
+  renderPresetList();
+  showToast('定型情報を削除しました');
+}
+
+// ══════════════════════════════════════════════════════════
+//  フォームリセット
+// ══════════════════════════════════════════════════════════
+function clearFormSilent() {
+  document.querySelectorAll('input[id], select[id], textarea[id]').forEach(el => {
+    if (el.closest('#case-overlay') || el.closest('#modal-overlay') || el.closest('#preset-overlay')) return;
+    if (el.type === 'checkbox') { el.checked = false; el.closest('.check-item')?.classList.remove('checked'); }
+    else if (el.type === 'radio') { /* value属性は変更しない */ }
+    else el.value = '';
+  });
+  document.querySelectorAll('.check-item input[type="checkbox"]').forEach(cb => {
+    cb.checked = false; cb.closest('.check-item')?.classList.remove('checked');
+  });
+  // デフォルト: 撮影方法チェック ON
+  document.querySelectorAll('#shoot-method-checks input[type="checkbox"]').forEach(cb => {
+    cb.checked = true; cb.closest('.check-item')?.classList.add('checked');
+  });
+  // 日付・文書番号
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('doc-date').value = today;
+  document.getElementById('doc-num').value = generateDocNum();
+  // 飛行高度ラジオをデフォルト（地表から）に戻してチェック連動も更新
+  document.getElementById('fly-alt-type-ground').checked = true;
+  syncAltSafetyCheck();
+  // 安全対策デフォルトチェック（syncAltSafetyCheck()後に実行してvalue文字列を確定させる）
+  const _defSafety = ['飛行高度は地表から150m未満','第三者の頭上は飛ばさない','バッテリー残量30%で帰還','飛行前点検を実施','強風時は飛行中止'];
+  document.querySelectorAll('#safety-checks input[type="checkbox"]').forEach(cb => {
+    const on = _defSafety.includes(cb.value);
+    cb.checked = on;
+    cb.closest('.check-item')?.classList.toggle('checked', on);
+  });
+  // 地点・機体リセット
+  setDateMode('single');
+  clearLocationMaps();
+  const locList = document.getElementById('locations-list');
+  locList.innerHTML = ''; locationCount = 0; addLocation();
+  const droneList = document.getElementById('drones-list');
+  droneList.innerHTML = ''; droneCount = 0; addDrone();
+  const pilotList = document.getElementById('pilots-list');
+  pilotList.innerHTML = ''; pilotCount = 0; addPilot();
+  updateProgress();
+}
+
+function resetForm() {
+  currentCaseId = null;
+  clearFormSilent();
+  document.getElementById('current-case-bar')?.classList.add('hidden');
+  showToast('リセットしました');
+}
+
+// ══════════════════════════════════════════════════════════
+//  プレビュー
+// ══════════════════════════════════════════════════════════
+function buildDocData() {
+  const drones = getDrones().filter(d => d.model);
+  const pilots = getPilots().filter(p => p.name);
+  return {
+    company:     val('company') || '（未入力）',
+    docDate:     fmtDate(val('doc-date')),
+    docNum:      val('doc-num') || '—',
+    client:      val('client') || '—',
+    shootPurpose: val('shoot-purpose') + (val('shoot-purpose-detail') ? '（' + val('shoot-purpose-detail') + '）' : ''),
+    shootMethod: getChecked('shoot-method-checks'),
+    shootTarget: val('shoot-target') || '—',
+    flyDate:     getFlyDateStr(),
+    flyTime:     (val('fly-start') && val('fly-end')) ? val('fly-start') + ' 〜 ' + val('fly-end') : '—',
+    flyBackup:   (val('fly-backup')||val('fly-backup-range')) ? fmtDate(val('fly-backup')||val('fly-backup-range')) : '予備日設定なし',
+    flyAlt:      (() => { const t = document.querySelector('input[name="fly-alt-type"]:checked')?.value || '地表'; const n = (document.getElementById('fly-alt-num')?.value || '').trim(); return n ? `${t}から${n}m未満` : '—'; })(),
+    locations:   getLocations().length ? getLocations() : [{num:1,name:'',addr:'—',note:''}],
+    category:    val('category') || '—',
+    flyType:     getChecked('fly-type-checks'),
+    specialConditions: getChecked('special-checks'),
+    safetyChecks: Array.from(document.querySelectorAll('#safety-checks input[type="checkbox"]:checked')).map(i => i.value),
+    safetyNote:  val('safety-note'),
+    drones,
+    pilots,
+    assistName:  val('assist-name') || '—',
+    permitNum:   val('permit-num') || '—',
+    permitType:  val('permit-type') || '—',
+    permitPeriod: (val('permit-start') && val('permit-end')) ? fmtDate(val('permit-start')) + ' 〜 ' + fmtDate(val('permit-end')) : '—',
+    permitArea:  val('permit-area') || '—',
+    insCompany:  val('ins-company') || '—',
+    insNum:      val('ins-num') || '—',
+    insEnd:      val('ins-end') ? fmtDate(val('ins-end')) : '—',
+    insAmount:   val('ins-amount') || '—',
+    contactName: val('contact-name') || '—',
+    contactTel:  val('contact-tel') || '—',
+    policeName:  val('police-name') || '—',
+    policeTel:   val('police-tel') || '—',
+    emergencyNote: val('emergency-note') || '—'
+  };
+}
+
+function docRow(key, value) {
+  return `<div class="doc-row"><div class="doc-key">${key}</div><div class="doc-val">${value}</div></div>`;
+}
+
+function renderPreviewHTML(d) {
+  const dronesHtml = d.drones && d.drones.length
+    ? d.drones.map((dr,i) => docRow('機体'+(i+1), escHtml(dr.model) + (dr.reg ? ' / '+escHtml(dr.reg) : '') + (dr.memo ? ' ('+escHtml(dr.memo)+')' : ''))).join('')
+    : docRow('使用機体', '—');
+  const pilotsHtml = d.pilots && d.pilots.length
+    ? d.pilots.map((p,i) => docRow(d.pilots.length > 1 ? '操縦者'+(i+1) : '操縦者',
+        (p.tel ? escHtml(p.name)+'（'+escHtml(p.tel)+'）' : escHtml(p.name)) + (p.cert ? '　証明番号：'+escHtml(p.cert) : ''))).join('')
+    : docRow('操縦者', '—');
+  return `
+    <div class="doc-title">ドローン飛行計画書</div>
+    <div class="doc-company">${escHtml(d.company)}</div>
+    <div class="doc-date">作成日：${d.docDate}　文書番号：${d.docNum}</div>
+
+    <div class="doc-section">
+      <div class="doc-section-title">■ 撮影概要</div>
+      ${docRow('撮影目的', escHtml(d.shootPurpose) || '—')}
+      ${docRow('撮影方法', escHtml(d.shootMethod))}
+      ${docRow('撮影対象', escHtml(d.shootTarget))}
+    </div>
+
+    <div class="doc-section">
+      <div class="doc-section-title">■ 飛行日時・場所</div>
+      ${docRow('飛行予定日', d.flyDate)}
+      ${docRow('飛行時間', d.flyTime)}
+      ${docRow('予備日', d.flyBackup)}
+      ${docRow('最大飛行高度', escHtml(d.flyAlt))}
+      ${d.locations.map((l,i) => {
+        const hasAddr = l.addr && l.addr !== '—';
+        return docRow('地点'+(i+1), (l.name ? '<strong>'+escHtml(l.name)+'</strong><br>' : '') + escHtml(l.addr || '—')) +
+          (l.note ? docRow('地点'+(i+1)+' 補足', escHtml(l.note)) : '') +
+          (hasAddr ? `<div style="padding:8px 12px 4px;"><div id="preview-map-${i}" style="width:100%;height:220px;border-radius:6px;border:1px solid #dde3f0;background:#e8edf4;"></div><div style="font-size:0.65rem;color:#aaa;margin-top:3px;text-align:right;">© 国土地理院</div></div>` : '');
+      }).join('')}
+    </div>
+
+    <div class="doc-section">
+      <div class="doc-section-title">■ 航空法・法規関連</div>
+      ${docRow('飛行カテゴリー', escHtml(d.category))}
+      ${docRow('飛行形態', escHtml(d.flyType))}
+      ${docRow('特定飛行条件', escHtml(d.specialConditions))}
+      ${d.safetyChecks && d.safetyChecks.length ? docRow('安全対策', d.safetyChecks.map(s => '✓ '+escHtml(s)).join('<br>')) : ''}
+      ${d.safetyNote ? docRow('補足事項', escHtml(d.safetyNote).replace(/\n/g,'<br>')) : ''}
+    </div>
+
+    <div class="doc-section">
+      <div class="doc-section-title">■ 機体・操縦者</div>
+      ${dronesHtml}
+      ${pilotsHtml}
+      ${d.assistName && d.assistName !== '—' ? docRow('補助者', escHtml(d.assistName)) : ''}
+    </div>
+
+    <div class="doc-section">
+      <div class="doc-section-title">■ 許可・申請情報</div>
+      ${docRow('許可番号', escHtml(d.permitNum))}
+      ${docRow('許可の種類', escHtml(d.permitType))}
+      ${docRow('有効期間', d.permitPeriod)}
+      ${docRow('飛行の経路・範囲', escHtml(d.permitArea))}
+    </div>
+
+    <div class="doc-section">
+      <div class="doc-section-title">■ 保険情報</div>
+      ${docRow('保険会社・商品名', escHtml(d.insCompany))}
+      ${docRow('証券番号', escHtml(d.insNum))}
+      ${docRow('有効期限', d.insEnd)}
+      ${docRow('支払限度額', d.insAmount && d.insAmount !== '—' ? escHtml(d.insAmount)+'（対人・対物）' : '—')}
+    </div>
+
+    <div class="doc-section">
+      <div class="doc-section-title">■ 緊急連絡体制</div>
+      ${docRow('主連絡先', escHtml(d.contactName))}
+      ${docRow('電話番号', escHtml(d.contactTel))}
+      ${docRow('管轄警察署', escHtml(d.policeName))}
+      ${docRow('警察署TEL', escHtml(d.policeTel))}
+      ${docRow('その他・備考', escHtml(d.emergencyNote).replace(/\n/g,'<br>'))}
+    </div>
+  `;
+}
+
+let previewMaps = [];
+
+function openPreview() {
+  const d = buildDocData();
+  previewMaps.forEach(m => { try { m.remove(); } catch(e) {} });
+  previewMaps = [];
+  document.getElementById('preview-doc').innerHTML = renderPreviewHTML(d);
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(() => initPreviewMaps(d.locations), 250);
+}
+
+function initPreviewMaps(locations) {
+  previewMaps.forEach(m => { try { m.remove(); } catch(e) {} });
+  previewMaps = [];
+  locations.forEach((loc, i) => {
+    if (!loc.addr || loc.addr === '—') return;
+    const mapEl = document.getElementById(`preview-map-${i}`);
+    if (!mapEl) return;
+    const map = L.map(`preview-map-${i}`, { zoomControl: true, attributionControl: false })
+      .setView([35.6812, 139.7671], 13);
+    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+    previewMaps.push(map);
+    fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(loc.addr)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data || !data.length) return;
+        const [lng, lat] = data[0].geometry.coordinates;
+        map.setView([lat, lng], 16);
+        L.marker([lat, lng], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="background:#0077b6;color:white;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:12px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3);">${i+1}</div>`,
+            iconSize:[26,26], iconAnchor:[13,13]
+          })
+        }).addTo(map).bindPopup(`<b>地点${i+1}${loc.name?' 【'+loc.name+'】':''}</b><br>${loc.addr}`);
+      }).catch(() => {});
+  });
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  previewMaps.forEach(m => { try { m.remove(); } catch(e) {} });
+  previewMaps = [];
+}
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ══════════════════════════════════════════════════════════
+//  PDF印刷出力
+// ══════════════════════════════════════════════════════════
+function generatePDF() {
+  if (!val('company') || !getPilots().some(p => p.name)) {
+    alert('会社名・操縦者名は必須です。入力してください。');
+    return;
+  }
+  const d = buildDocData();
+  const printDiv = document.createElement('div');
+  printDiv.id = 'print-target';
+  printDiv.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:210mm;background:white;padding:14mm 12mm;font-family:"ヒラギノ角ゴ Pro W3","Hiragino Kaku Gothic Pro","ヒラギノ角ゴ ProN W3","Hiragino Kaku Gothic ProN",-apple-system,BlinkMacSystemFont,sans-serif;font-size:10pt;line-height:1.8;color:#111;z-index:-1;';
+  printDiv.innerHTML = buildPrintHTML(d);
+  document.body.appendChild(printDiv);
+
+  const style = document.createElement('style');
+  style.id = 'print-style';
+  style.textContent = `@media print {
+    body > *:not(#print-target) { display: none !important; }
+    #print-target { position:static!important; top:auto!important; left:auto!important; width:100%!important; padding:0!important; z-index:auto!important; }
+    @page { size: A4; margin: 12mm 10mm; }
+    .print-loc-block { page-break-inside: avoid; }
+    .print-loc-block + .print-loc-block { page-break-before: always; }
+  }`;
+  document.head.appendChild(style);
+
+  // 地点ごとの地図をprintDiv内に初期化（保存済み座標を使用）
+  const printMapInstances = [];
+  const locRows = Array.from(document.querySelectorAll('#locations-list .location-row'));
+  locRows.forEach((row, i) => {
+    const el = document.getElementById('pmap-' + i);
+    if (!el) return;
+    const mapId = row.dataset.mapId;
+    const entry = mapId ? locationMaps[mapId] : null;
+    const map = L.map('pmap-' + i, { zoomControl: false, attributionControl: false })
+      .setView([35.6812, 139.7671], 10);
+    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+    printMapInstances.push(map);
+    if (entry && entry.coords) {
+      const [lat, lng] = entry.coords;
+      map.setView([lat, lng], 16);
+      L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="background:#0077b6;color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);">${i+1}</div>`,
+          iconSize:[24,24], iconAnchor:[12,12]
+        })
+      }).addTo(map);
+    }
+  });
+
+  const origTitle = document.title;
+  document.title = 'ドローン飛行計画書_' + d.docNum;
+  const delay = printMapInstances.length > 0 ? 2500 : 300;
+
+  setTimeout(() => {
+    window.print();
+    document.title = origTitle;
+    printMapInstances.forEach(m => { try { m.remove(); } catch(e) {} });
+    document.body.removeChild(printDiv);
+    document.head.removeChild(style);
+    showToast('印刷ダイアログから「PDFに保存」を選択してください');
+  }, delay);
+}
+
+function buildPrintHTML(d) {
+  const ss = 'margin-bottom:11pt;border:1px solid #ccc;border-radius:4pt;overflow:hidden;page-break-inside:avoid;';
+  const ts = 'background:#0077b6;color:white;font-weight:bold;padding:5pt 9pt;font-size:9pt;letter-spacing:0.05em;';
+  const ks = 'background:#f0f4fa;font-weight:bold;font-size:8.5pt;color:#444;padding:4pt 7pt;width:88pt;border-bottom:1px solid #ddd;border-right:1px solid #ddd;vertical-align:top;';
+  const vs = 'font-size:8.5pt;padding:4pt 7pt;border-bottom:1px solid #ddd;vertical-align:top;';
+  function pr(k, v) { return `<tr><td style="${ks}">${k}</td><td style="${vs}">${v||'—'}</td></tr>`; }
+  function sec(title, rows) { return `<div style="${ss}"><div style="${ts}">■ ${title}</div><table style="width:100%;border-collapse:collapse;">${rows}</table></div>`; }
+
+  const dronesRows = d.drones && d.drones.length
+    ? d.drones.map((dr,i) => pr('機体'+(i+1), escHtml(dr.model)+(dr.reg?' / '+escHtml(dr.reg):'')+(dr.memo?' ('+escHtml(dr.memo)+')':''))).join('')
+    : pr('使用機体', '—');
+  const pilotsRows = d.pilots && d.pilots.length
+    ? d.pilots.map((p,i) => pr(d.pilots.length>1?'操縦者'+(i+1):'操縦者',
+        (p.tel ? escHtml(p.name)+'（'+escHtml(p.tel)+'）' : escHtml(p.name))+(p.cert?' 証明番号：'+escHtml(p.cert):''))).join('')
+    : pr('操縦者', '—');
+
+  return `
+    <div style="text-align:center;margin-bottom:13pt;">
+      <div style="font-size:17pt;font-weight:bold;letter-spacing:0.08em;border-bottom:2.5px solid #0077b6;padding-bottom:5pt;margin-bottom:4pt;">ドローン飛行計画書</div>
+      <div style="font-size:11pt;font-weight:bold;color:#0077b6;">${escHtml(d.company)}</div>
+      <div style="font-size:8.5pt;color:#666;margin-top:2pt;">作成日：${d.docDate}　　文書番号：${d.docNum}</div>
+    </div>
+    ${sec('撮影概要', pr('撮影目的',escHtml(d.shootPurpose))+pr('撮影方法',escHtml(d.shootMethod))+pr('撮影対象',escHtml(d.shootTarget)))}
+    ${sec('飛行日時・場所',
+      pr('飛行予定日',d.flyDate)+pr('飛行時間',d.flyTime)+pr('予備日',d.flyBackup)+pr('最大飛行高度',escHtml(d.flyAlt))
+    )}
+    ${d.locations.map((l,i) =>
+      `<div class="print-loc-block" style="margin-bottom:11pt;border:1px solid #ccc;border-radius:4pt;overflow:hidden;page-break-inside:avoid;">` +
+      `<div style="background:#0077b6;color:white;font-weight:bold;padding:5pt 9pt;font-size:9pt;letter-spacing:0.05em;">📍 地点${i+1}${l.name ? ' 【'+escHtml(l.name)+'】' : ''}</div>` +
+      `<table style="width:100%;border-collapse:collapse;">` +
+      pr('住所', escHtml(l.addr||'—')) +
+      (l.note ? pr('補足', escHtml(l.note)) : '') +
+      (l.addr ? `<tr><td colspan="2" style="padding:4pt 7pt;border-bottom:1px solid #ddd;"><div id="pmap-${i}" style="width:100%;height:180px;background:#e8edf4;border-radius:3pt;"></div><div style="font-size:7pt;color:#999;text-align:right;margin-top:2pt;">© 国土地理院</div></td></tr>` : '') +
+      `</table></div>`
+    ).join('')}
+    ${sec('航空法・法規関連',
+      pr('飛行カテゴリー',escHtml(d.category))+pr('飛行形態',escHtml(d.flyType))+pr('特定飛行条件',escHtml(d.specialConditions))+
+      (d.safetyChecks&&d.safetyChecks.length?pr('安全対策',d.safetyChecks.map(s=>'・'+escHtml(s)).join('<br>')):'') +
+      (d.safetyNote?pr('補足事項',escHtml(d.safetyNote).replace(/\n/g,'<br>')):'')
+    )}
+    ${sec('機体・操縦者情報',
+      dronesRows+pilotsRows+(d.assistName&&d.assistName!=='—'?pr('補助者氏名',escHtml(d.assistName)):'')
+    )}
+    ${sec('許可・申請情報', pr('許可番号',escHtml(d.permitNum))+pr('許可の種類',escHtml(d.permitType))+pr('有効期間',d.permitPeriod)+pr('飛行の経路・範囲',escHtml(d.permitArea)))}
+    ${sec('保険情報', pr('保険会社・商品名',escHtml(d.insCompany))+pr('証券番号',escHtml(d.insNum))+pr('有効期限',d.insEnd)+pr('支払限度額',d.insAmount&&d.insAmount!=='—'?escHtml(d.insAmount)+'（対人・対物）':'—'))}
+    ${sec('緊急連絡体制', pr('主連絡先',escHtml(d.contactName))+pr('主連絡先 電話番号',escHtml(d.contactTel))+pr('管轄警察署',escHtml(d.policeName))+pr('警察署 電話番号',escHtml(d.policeTel))+pr('その他・備考',escHtml(d.emergencyNote).replace(/\n/g,'<br>')))}
+  `;
+}
+
+// ══════════════════════════════════════════════════════════
+//  許可書PDF読み込み
+// ══════════════════════════════════════════════════════════
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+}
+
+let _pdfDronePending = [];
+
+function openAircraftPdfPicker() {
+  if (typeof pdfjsLib === 'undefined') {
+    showToast('PDF.jsが読み込まれていません。インターネット接続を確認してください。', '#e05');
+    return;
+  }
+  document.getElementById('aircraft-pdf-input').click();
+}
+
+async function _handleAircraftPdfChange(e) {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  showToast('PDFを解析中…', '#0077b6');
+  try {
+    let drones = [];
+    for (const file of files) {
+      const items = await _pdfExtractItems(file);
+      const rows  = _pdfGroupRows(items);
+      drones = drones.concat(_pdfParseAircraft(rows));
+    }
+    if (drones.length === 0) {
+      showToast('機体情報が見つかりませんでした', '#e05');
+    } else {
+      _openAircraftSelectModal(drones);
+    }
+  } catch(err) {
+    console.error(err);
+    showToast('PDF解析エラー: ' + err.message, '#e05');
+  }
+  e.target.value = '';
+}
+
+function _openAircraftSelectModal(drones) {
+  const list = document.getElementById('aircraft-select-list');
+  list.innerHTML = '';
+  drones.forEach((d, i) => {
+    const displayName = _pdfFormatDroneName(d.maker, d.model);
+    const item = document.createElement('label');
+    item.className = 'aircraft-check-item selected';
+    item.innerHTML = `
+      <input type="checkbox" class="aircraft-cb" data-idx="${i}" checked>
+      <span class="aircraft-check-name">${escHtml(displayName)}</span>
+      <span class="aircraft-check-reg">${escHtml(d.reg)}</span>`;
+    item.querySelector('input').addEventListener('change', function() {
+      item.classList.toggle('selected', this.checked);
+      _updateAircraftSelectCount();
+    });
+    list.appendChild(item);
+  });
+  _pdfDronePending = drones;
+  _updateAircraftSelectCount();
+  document.getElementById('aircraft-select-overlay').classList.add('open');
+}
+
+function _updateAircraftSelectCount() {
+  const total    = document.querySelectorAll('#aircraft-select-list .aircraft-cb').length;
+  const checked  = document.querySelectorAll('#aircraft-select-list .aircraft-cb:checked').length;
+  document.getElementById('aircraft-select-count').textContent = `${checked} / ${total} 機選択中`;
+}
+
+function toggleAllAircraftSelect(state) {
+  document.querySelectorAll('#aircraft-select-list .aircraft-cb').forEach(cb => {
+    cb.checked = state;
+    cb.closest('.aircraft-check-item').classList.toggle('selected', state);
+  });
+  _updateAircraftSelectCount();
+}
+
+function confirmAircraftSelect() {
+  const selected = [];
+  document.querySelectorAll('#aircraft-select-list .aircraft-cb:checked').forEach(cb => {
+    selected.push(_pdfDronePending[parseInt(cb.dataset.idx, 10)]);
+  });
+  if (selected.length === 0) {
+    showToast('機体が選択されていません', '#e05');
+    return;
+  }
+  closeAircraftSelectModal();
+  const existing = getDrones().filter(d => d.model || d.reg);
+  if (existing.length > 0) {
+    _pdfDronePending = selected;
+    document.getElementById('pdf-drone-msg').textContent =
+      `既存の機体が${existing.length}機あります。選択した${selected.length}機をどうしますか？`;
+    document.getElementById('pdf-drone-overlay').classList.add('open');
+  } else {
+    _pdfApplyDrones(selected, 'replace');
+    showToast(`機体一覧を読み込みました（${selected.length}機）`);
+  }
+}
+
+function closeAircraftSelectModal() {
+  document.getElementById('aircraft-select-overlay').classList.remove('open');
+}
+
+function openPermitPdfPicker() {
+  if (typeof pdfjsLib === 'undefined') {
+    showToast('PDF.jsが読み込まれていません。インターネット接続を確認してください。', '#e05');
+    return;
+  }
+  document.getElementById('permit-pdf-input').click();
+}
+
+async function _handlePermitPdfChange(e) {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  showToast('PDFを解析中…', '#0077b6');
+  try {
+    let permitData = {};
+    let drones = [];
+    for (const file of files) {
+      const items = await _pdfExtractItems(file);
+      const rows  = _pdfGroupRows(items);
+      const text  = rows.map(r => r.text).join('\n');
+      const juCount = (text.match(/JU[0-9A-Fa-f]{6,}/g) || []).length;
+      if (juCount >= 3) {
+        drones = _pdfParseAircraft(rows);
+      } else {
+        Object.assign(permitData, _pdfParseMain(text));
+      }
+    }
+
+    // 許可情報をフォームへ
+    if (permitData.permitNum)   { document.getElementById('permit-num').value   = permitData.permitNum; }
+    if (permitData.permitType)  { document.getElementById('permit-type').value  = permitData.permitType; }
+    if (permitData.permitStart) { document.getElementById('permit-start').value = permitData.permitStart; }
+    if (permitData.permitEnd)   { document.getElementById('permit-end').value   = permitData.permitEnd; }
+    if (permitData.permitArea)  { document.getElementById('permit-area').value  = permitData.permitArea; }
+
+    showToast('PDFから許可情報を読み込みました');
+    updateProgress();
+  } catch(err) {
+    console.error(err);
+    showToast('PDF解析エラー: ' + err.message, '#e05');
+  }
+  e.target.value = '';
+}
+
+async function _pdfExtractItems(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  const items = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc   = await page.getTextContent();
+    for (const item of tc.items) {
+      const s = item.str.trim();
+      if (s) items.push({ str: s, x: Math.round(item.transform[4]), y: Math.round(item.transform[5]) });
+    }
+  }
+  return items;
+}
+
+function _pdfGroupRows(items, tol = 3) {
+  const rows = [];
+  for (const item of [...items].sort((a, b) => b.y - a.y)) {
+    const row = rows.find(r => Math.abs(r.y - item.y) <= tol);
+    if (row) { row.items.push(item); }
+    else      { rows.push({ y: item.y, items: [item] }); }
+  }
+  for (const row of rows) {
+    row.items.sort((a, b) => a.x - b.x);
+    row.text = row.items.map(i => i.str).join(' ');
+  }
+  return rows;
+}
+
+function _reiwaToAD(n) { return 2018 + parseInt(n, 10); }
+
+function _pdfParseMain(text) {
+  const res = {};
+  // 許可番号（例: 東空運航第47087号）
+  const mNum = text.match(/([東西南北中関九沖福那]\S*運航第\d+号)/);
+  if (mNum) res.permitNum = mNum[1];
+  // 許可期間
+  const mPeriod = text.match(/令和(\d+)年(\d+)月(\d+)日から令和(\d+)年(\d+)月(\d+)日/);
+  if (mPeriod) {
+    const p = n => String(n).padStart(2, '0');
+    res.permitStart = `${_reiwaToAD(mPeriod[1])}-${p(mPeriod[2])}-${p(mPeriod[3])}`;
+    res.permitEnd   = `${_reiwaToAD(mPeriod[4])}-${p(mPeriod[5])}-${p(mPeriod[6])}`;
+  }
+  // 飛行経路（複数行対応：次のラベルまたはEOFで終了）
+  const mArea = text.match(/飛\s*行\s*の\s*経\s*路[：:＊\s]+(.+?)(?=\n\s*登\s*録\s*記\s*号|\n\s*無\s*人\s*航\s*空\s*機|\n\s*無人航空機を飛行|$)/s);
+  if (mArea) {
+    res.permitArea = mArea[1].trim().replace(/\n/g, '').replace(/\s{2,}/g, '');
+  } else if (text.includes('日本全国')) {
+    const m2 = text.match(/(日本全国.+?)(?=登\s*録\s*記\s*号|無\s*人\s*航\s*空\s*機|$)/s);
+    if (m2) res.permitArea = m2[1].trim().replace(/\n/g, '').replace(/\s{2,}/g, '');
+  }
+  // 許可の種類
+  if (text.includes('日本全国')) res.permitType = '包括申請（全国）';
+  return res;
+}
+
+function _pdfParseAircraft(rows) {
+  const drones = [];
+  for (const row of rows) {
+    const mJu = row.text.match(/(JU[0-9A-Fa-f]{6,})/i);
+    if (!mJu) continue;
+    const reg = mJu[1].toUpperCase();
+    const juItem = row.items.find(i => i.str.toUpperCase() === reg.toUpperCase());
+    if (!juItem) continue;
+    // JU番号より左にある非数字アイテム = No.列除外
+    const left = row.items.filter(i => i.x < juItem.x && !/^\d+$/.test(i.str));
+    if (left.length >= 2) {
+      const maker = left[0].str.trim();
+      const model = left.slice(1).map(i => i.str).join(' ').trim();
+      drones.push({ maker, model, reg });
+    } else if (left.length === 1) {
+      drones.push({ maker: left[0].str.trim(), model: '', reg });
+    }
+  }
+  return drones;
+}
+
+function _pdfFormatDroneName(maker, model) {
+  if (!model) return maker;
+  if (model.toLowerCase().startsWith(maker.toLowerCase())) return model;
+  return maker + ' ' + model;
+}
+
+function _pdfApplyDrones(drones, mode) {
+  const list = document.getElementById('drones-list');
+  if (mode === 'replace') { list.innerHTML = ''; droneCount = 0; }
+  for (const d of drones) {
+    addDrone(_pdfFormatDroneName(d.maker, d.model), d.reg, '');
+  }
+  updateProgress();
+}
+
+function applyPdfDrones(mode) {
+  document.getElementById('pdf-drone-overlay').classList.remove('open');
+  _pdfApplyDrones(_pdfDronePending, mode);
+  const label = mode === 'replace' ? '置き換え' : '追加';
+  showToast(`機体情報を${label}しました（${_pdfDronePending.length}機）`);
+  _pdfDronePending = [];
+}
+
+function cancelPdfDrones() {
+  document.getElementById('pdf-drone-overlay').classList.remove('open');
+  _pdfDronePending = [];
+}
+
+// ══════════════════════════════════════════════════════════
+//  初期化 (window.onload)
+// ══════════════════════════════════════════════════════════
+window.onload = function() {
+  // 今日の日付・文書番号
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('doc-date').value = today;
+  document.getElementById('doc-num').value = generateDocNum();
+
+  // 撮影方法デフォルトON
+  document.querySelectorAll('#shoot-method-checks input[type="checkbox"]').forEach(cb => {
+    cb.checked = true;
+    cb.closest('.check-item')?.classList.add('checked');
+  });
+
+  // 安全対策デフォルトチェック（先にvalue文字列を確定させる）
+  syncAltSafetyCheck();
+  const defaultSafety = ['飛行高度は地表から150m未満','第三者の頭上は飛ばさない','バッテリー残量30%で帰還','飛行前点検を実施','強風時は飛行中止'];
+  document.querySelectorAll('#safety-checks input[type="checkbox"]').forEach(cb => {
+    if (defaultSafety.includes(cb.value)) {
+      cb.checked = true;
+      cb.closest('.check-item')?.classList.add('checked');
+    }
+  });
+
+  // 地点1行・機体1行・操縦者1行
+  if (document.getElementById('locations-list').children.length === 0) addLocation();
+  if (document.getElementById('drones-list').children.length === 0) addDrone();
+  if (document.getElementById('pilots-list').children.length === 0) addPilot();
+
+  // 許可書PDF読み込みリスナー
+  document.getElementById('permit-pdf-input').addEventListener('change', _handlePermitPdfChange);
+  document.getElementById('aircraft-pdf-input').addEventListener('change', _handleAircraftPdfChange);
+
+  // 案件名・定型名モーダルのEnterキー対応
+  document.getElementById('save-case-name-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') confirmSaveCase();
+    if (e.key === 'Escape') closeSaveModal();
+  });
+  document.getElementById('preset-name-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') confirmSavePreset();
+    if (e.key === 'Escape') closePresetNameModal();
+  });
+
+  // ボタンはinline onclickで処理済み、リスナー不要
+
+  syncAltSafetyCheck();
+  updateProgress();
+};
+</script>
+</body>
+</html>
