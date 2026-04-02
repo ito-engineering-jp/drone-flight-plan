@@ -852,7 +852,7 @@ select {
     </div>
     <div class="header-right">
       <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
-      <div class="header-badge">Ver. 3.17</div>
+      <div class="header-badge">Ver. 3.18</div>
     </div>
   </div>
 </header>
@@ -2535,6 +2535,7 @@ function generatePDF() {
     #print-target { position:static!important; top:auto!important; left:auto!important; width:100%!important; padding:0!important; z-index:auto!important; }
     @page { size: A4; margin: 12mm 10mm; }
     .print-loc-block { page-break-inside: avoid; }
+    [id^="pmap-"] { display: none !important; }
   }`;
   document.head.appendChild(style);
 
