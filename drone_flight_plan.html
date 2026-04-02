@@ -801,6 +801,45 @@ select {
   .field-row, .field-row.trio { grid-template-columns: 1fr; }
   .check-grid { grid-template-columns: 1fr; }
 }
+
+@media (max-width: 480px) {
+  /* ヘッダー縮小 */
+  .header-inner { padding: 8px 14px; gap: 8px; }
+  .header-icon  { display: none; }
+  header h1     { font-size: 0.92rem; line-height: 1.3; }
+  header p      { display: none; }
+  .header-badge { font-size: 0.65rem; padding: 3px 8px; }
+  .btn-cases    { font-size: 0.75rem; padding: 6px 10px; }
+
+  /* セクションヘッダーのボタン群を折り返し */
+  .section-title-row { flex-wrap: wrap; gap: 4px; }
+  .section-title-row > div[style*="display:flex"] { flex-wrap: wrap; }
+  .btn-preset-apply  { font-size: 0.72rem; padding: 4px 9px; white-space: nowrap; }
+
+  /* セクションカードの余白を縮小 */
+  .section-card  { border-radius: 12px; }
+  .section-header { padding: 12px 14px; gap: 10px; }
+  .section-body  { padding: 14px; }
+  .section-num   { width: 32px; height: 32px; font-size: 0.9rem; border-radius: 9px; flex-shrink: 0; }
+  .section-title { font-size: 0.95rem; }
+
+  /* 飛行日程タイプボタン */
+  .date-mode-btn { font-size: 0.78rem; padding: 8px 4px; white-space: nowrap; flex: 1; text-align: center; }
+
+  /* 地点・機体行の入力欄がはみ出さないよう */
+  .location-row { overflow: hidden; }
+  .location-row input { min-width: 0; width: 100%; }
+
+  /* アクションバー */
+  .actions-bar { flex-wrap: wrap; gap: 8px; padding: 14px; }
+  .actions-bar .btn { flex: 1 1 calc(50% - 4px); font-size: 0.80rem; padding: 10px 6px; text-align: center; }
+
+  /* メインコンテンツの余白 */
+  main { padding: 12px 10px; }
+
+  /* 機体・操縦者行 */
+  .location-row { padding: 10px; }
+}
 </style>
 </head>
 <body>
@@ -813,7 +852,7 @@ select {
     </div>
     <div class="header-right">
       <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
-      <div class="header-badge">Ver. 3.14</div>
+      <div class="header-badge">Ver. 3.15</div>
     </div>
   </div>
 </header>
