@@ -852,7 +852,7 @@ select {
     </div>
     <div class="header-right">
       <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
-      <div class="header-badge">Ver. 3.15</div>
+      <div class="header-badge">Ver. 3.16</div>
     </div>
   </div>
 </header>
@@ -1834,7 +1834,7 @@ function syncAltSafetyCheck() {
 // ══════════════════════════════════════════════════════════
 //  進捗バー
 // ══════════════════════════════════════════════════════════
-const REQUIRED_IDS = ['company','doc-date','shoot-purpose','shoot-target','category'];
+const REQUIRED_IDS = ['company','shoot-purpose','shoot-target','category'];
 
 function updateProgress() {
   let filled = 0;
@@ -1853,7 +1853,7 @@ function updateProgress() {
   if (getLocations().some(l => l.addr)) filled++;
   if (getPilots().some(p => p.name)) filled++;
   if (getDrones().some(d => d.model)) filled++;
-  const total = REQUIRED_IDS.length + 4; // 固定5 + 日程1 + 地点1 + 操縦者1 + 機体1 = 9
+  const total = REQUIRED_IDS.length + 4; // 固定4 + 日程1 + 地点1 + 操縦者1 + 機体1 = 8
   const pct = Math.round((filled / total) * 100);
   document.getElementById('bar-fill').style.width = pct + '%';
   document.getElementById('pct-label').textContent = pct + '%';
