@@ -852,7 +852,7 @@ select {
     </div>
     <div class="header-right">
       <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
-      <div class="header-badge">Ver. 3.16</div>
+      <div class="header-badge">Ver. 3.17</div>
     </div>
   </div>
 </header>
@@ -1082,6 +1082,7 @@ select {
             <button type="button" class="btn-add-row" onclick="addLocation()" style="margin:0;">＋ 地点を追加</button>
           </label>
           <div id="locations-list"></div>
+          <button type="button" class="btn-add-row" onclick="addLocation()" style="margin-top:8px;width:100%;justify-content:center;">＋ 地点を追加</button>
         </div>
       </div>
     </div>
@@ -2534,7 +2535,6 @@ function generatePDF() {
     #print-target { position:static!important; top:auto!important; left:auto!important; width:100%!important; padding:0!important; z-index:auto!important; }
     @page { size: A4; margin: 12mm 10mm; }
     .print-loc-block { page-break-inside: avoid; }
-    .print-loc-block + .print-loc-block { page-break-before: always; }
   }`;
   document.head.appendChild(style);
 
