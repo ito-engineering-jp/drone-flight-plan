@@ -852,7 +852,7 @@ select {
     </div>
     <div class="header-right">
       <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
-      <div class="header-badge">Ver. 3.20</div>
+      <div class="header-badge">Ver. 3.21</div>
     </div>
   </div>
 </header>
@@ -2548,16 +2548,50 @@ function generatePDF() {
   document.head.appendChild(style);
 
   // 地点ごとの地図をprintDiv内に初期化（保存済み座標を使用）
+  const printMapInstances = [];
+  const tileLoadPromises = [];
+  const locRows = Array.from(document.querySelectorAll('#locations-list .location-row'));
+  locRows.forEach((row, i) => {
+    const el = document.getElementById('pmap-' + i);
+    if (!el) return;
+    const mapId = row.dataset.mapId;
+    const entry = mapId ? locationMaps[mapId] : null;
+    const map = L.map('pmap-' + i, { zoomControl: false, attributionControl: false })
+      .setView([35.6812, 139.7671], 10);
+    const tileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', { maxZoom: 18 });
+    const p = new Promise(resolve => {
+      tileLayer.on('load', resolve);
+      setTimeout(resolve, 8000);
+    });
+    tileLoadPromises.push(p);
+    tileLayer.addTo(map);
+    printMapInstances.push(map);
+    if (entry && entry.coords) {
+      const [lat, lng] = entry.coords;
+      map.setView([lat, lng], 16);
+      L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="background:#0077b6;color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);">${i+1}</div>`,
+          iconSize:[24,24], iconAnchor:[12,12]
+        })
+      }).addTo(map);
+    }
+  });
+
   const origTitle = document.title;
   document.title = 'ドローン飛行計画書_' + d.docNum;
 
-  setTimeout(() => {
-    window.print();
-    document.title = origTitle;
-    document.body.removeChild(printDiv);
-    document.head.removeChild(style);
-    showToast('印刷ダイアログから「PDFに保存」を選択してください');
-  }, 800);
+  Promise.all(tileLoadPromises).then(() => {
+    setTimeout(() => {
+      window.print();
+      document.title = origTitle;
+      printMapInstances.forEach(m => { try { m.remove(); } catch(e) {} });
+      document.body.removeChild(printDiv);
+      document.head.removeChild(style);
+      showToast('印刷ダイアログから「PDFに保存」を選択してください');
+    }, 500);
+  });
 }
 
 function _buildStaticMap(coords, num) {
@@ -2611,7 +2645,7 @@ function buildPrintHTML(d) {
       `<table style="width:100%;border-collapse:collapse;">` +
       pr('住所', escHtml(l.addr||'—')) +
       (l.note ? pr('補足', escHtml(l.note)) : '') +
-      (l.coords ? `<tr><td colspan="2" style="padding:4pt 7pt;border-bottom:1px solid #ddd;">${_buildStaticMap(l.coords, i+1)}<div style="font-size:7pt;color:#999;text-align:right;margin-top:2pt;">地図提供：国土地理院</div></td></tr>` : '') +
+      (l.addr ? `<tr><td colspan="2" style="padding:4pt 7pt;border-bottom:1px solid #ddd;"><div id="pmap-${i}" style="width:100%;height:180px;background:#e8edf4;border-radius:3pt;"></div><div style="font-size:7pt;color:#999;text-align:right;margin-top:2pt;">© 国土地理院</div></td></tr>` : '') +
       `</table></div>`
     ).join('')}
     ${sec('航空法・法規関連',
