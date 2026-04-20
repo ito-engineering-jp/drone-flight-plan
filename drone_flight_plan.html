@@ -852,7 +852,7 @@ select {
     </div>
     <div class="header-right">
       <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
-      <div class="header-badge">Ver. 3.21</div>
+      <div class="header-badge">Ver. 3.22</div>
     </div>
   </div>
 </header>
@@ -1576,7 +1576,11 @@ function getFlyDateStr() {
     const fd = f ? new Date(f+'T00:00:00') : null;
     const td = t ? new Date(t+'T00:00:00') : null;
     const fmt = dt => dt ? `${dt.getMonth()+1}月${dt.getDate()}日` : '?';
-    if (fd && td) return `${fd.getFullYear()}年${fmt(fd)}〜${fmt(td)}`;
+    if (fd && td) {
+      const sameYear = fd.getFullYear() === td.getFullYear();
+      const toStr = sameYear ? fmt(td) : `${td.getFullYear()}年${fmt(td)}`;
+      return `${fd.getFullYear()}年${fmt(fd)}〜${toStr}`;
+    }
     return f ? fmtDate(f) : fmtDate(t);
   } else {
     const dates = Array.from(document.querySelectorAll('.multi-date-input')).map(i => i.value).filter(Boolean);
