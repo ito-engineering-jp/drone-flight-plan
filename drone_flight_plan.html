@@ -853,7 +853,7 @@ select {
     <div class="header-right">
       <button class="btn-cases" onclick="newCase()">＋ 新規作成</button>
       <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
-      <div class="header-badge">Ver. 3.23</div>
+      <div class="header-badge">Ver. 3.24</div>
     </div>
   </div>
 </header>
@@ -1280,9 +1280,24 @@ select {
             <input type="date" id="ins-end">
           </div>
           <div class="field-group">
-            <label class="field-label">支払限度額（対人・対物）</label>
-            <select id="ins-amount">
+            <label class="field-label">支払限度額（対人）</label>
+            <select id="ins-amount-person">
               <option value="">選択</option>
+              <option>無制限</option>
+              <option>10億円</option>
+              <option>5億円</option>
+              <option>1億円</option>
+              <option>5000万円</option>
+              <option>その他</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">支払限度額（対物）</label>
+            <select id="ins-amount-thing">
+              <option value="">選択</option>
+              <option>無制限</option>
               <option>10億円</option>
               <option>5億円</option>
               <option>1億円</option>
@@ -2160,7 +2175,7 @@ const PRESET_FIELDS = {
   pilot_info:     ['assist-name'],   // __pilots saved separately
   drone_info:     [],                // __drones saved separately
   permit_info:    ['permit-num', 'permit-type', 'permit-start', 'permit-end', 'permit-area', 'category'],
-  insurance_info: ['ins-company', 'ins-num', 'ins-end', 'ins-amount'],
+  insurance_info: ['ins-company', 'ins-num', 'ins-end', 'ins-amount-person', 'ins-amount-thing'],
   police_info:    ['contact-name', 'contact-tel', 'emergency-note']
 };
 const PRESET_LABELS = {
@@ -2389,7 +2404,8 @@ function buildDocData() {
     insCompany:  val('ins-company') || '—',
     insNum:      val('ins-num') || '—',
     insEnd:      val('ins-end') ? fmtDate(val('ins-end')) : '—',
-    insAmount:   val('ins-amount') || '—',
+    insAmountPerson: val('ins-amount-person') || '—',
+    insAmountThing:  val('ins-amount-thing')  || '—',
     contactName: val('contact-name') || '—',
     contactTel:  val('contact-tel') || '—',
     policeName:  val('police-name') || '—',
@@ -2465,7 +2481,8 @@ function renderPreviewHTML(d) {
       ${docRow('保険会社・商品名', escHtml(d.insCompany))}
       ${docRow('証券番号', escHtml(d.insNum))}
       ${docRow('有効期限', d.insEnd)}
-      ${docRow('支払限度額', d.insAmount && d.insAmount !== '—' ? escHtml(d.insAmount)+'（対人・対物）' : '—')}
+      ${docRow('支払限度額（対人）', escHtml(d.insAmountPerson))}
+      ${docRow('支払限度額（対物）', escHtml(d.insAmountThing))}
     </div>
 
     <div class="doc-section">
@@ -2662,7 +2679,7 @@ function buildPrintHTML(d) {
       dronesRows+pilotsRows+(d.assistName&&d.assistName!=='—'?pr('補助者氏名',escHtml(d.assistName)):'')
     )}
     ${sec('許可・申請情報', pr('許可番号',escHtml(d.permitNum))+pr('許可の種類',escHtml(d.permitType))+pr('有効期間',d.permitPeriod)+pr('飛行の経路・範囲',escHtml(d.permitArea)))}
-    ${sec('保険情報', pr('保険会社・商品名',escHtml(d.insCompany))+pr('証券番号',escHtml(d.insNum))+pr('有効期限',d.insEnd)+pr('支払限度額',d.insAmount&&d.insAmount!=='—'?escHtml(d.insAmount)+'（対人・対物）':'—'))}
+    ${sec('保険情報', pr('保険会社・商品名',escHtml(d.insCompany))+pr('証券番号',escHtml(d.insNum))+pr('有効期限',d.insEnd)+pr('支払限度額（対人）',escHtml(d.insAmountPerson))+pr('支払限度額（対物）',escHtml(d.insAmountThing)))}
     ${sec('緊急連絡体制', pr('主連絡先',escHtml(d.contactName))+pr('主連絡先 電話番号',escHtml(d.contactTel))+pr('管轄警察署',escHtml(d.policeName))+pr('警察署 電話番号',escHtml(d.policeTel))+pr('その他・備考',escHtml(d.emergencyNote).replace(/\n/g,'<br>')))}
   `;
 }
