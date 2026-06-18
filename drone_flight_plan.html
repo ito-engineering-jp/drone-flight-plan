@@ -872,7 +872,7 @@ select {
     <div class="header-right">
       <button class="btn-cases" onclick="newCase()">＋ 新規作成</button>
       <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
-      <div class="header-badge">Ver. 3.25</div>
+      <div class="header-badge">Ver. 3.26</div>
     </div>
   </div>
 </header>
@@ -3093,11 +3093,13 @@ window.onload = function() {
 
   // 案件名・定型名モーダルのEnterキー対応
   document.getElementById('save-case-name-input').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') confirmSaveCase();
+    // IME（日本語変換）の確定Enterでは保存しない
+    if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) confirmSaveCase();
     if (e.key === 'Escape') closeSaveModal();
   });
   document.getElementById('preset-name-input').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') confirmSavePreset();
+    // IME（日本語変換）の確定Enterでは保存しない
+    if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) confirmSavePreset();
     if (e.key === 'Escape') closePresetNameModal();
   });
 
