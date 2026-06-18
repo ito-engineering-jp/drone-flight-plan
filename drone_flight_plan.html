@@ -417,10 +417,29 @@ select {
 .btn-add-row:hover { background: var(--sky-light); }
 .multi-date-row {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
+  grid-template-columns: minmax(0,1.3fr) auto auto auto auto;
+  gap: 6px;
   align-items: center;
   margin-bottom: 8px;
+}
+.multi-date-row .multi-start-input,
+.multi-date-row .multi-end-input { width: 100%; min-width: 0; }
+.multi-time-sep { font-size: 0.85rem; color: var(--ink-light); text-align: center; }
+.multi-dates-head {
+  display: grid;
+  grid-template-columns: minmax(0,1.3fr) auto auto auto auto;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+  color: var(--ink-light);
+  font-weight: 600;
+}
+.multi-dates-head span:nth-child(2) { grid-column: 2 / 5; text-align: center; }
+@media (max-width: 480px) {
+  .multi-date-row { grid-template-columns: 1fr; }
+  .multi-date-row .multi-time-sep { display: none; }
+  .multi-date-row .btn-remove-row { justify-self: end; }
+  .multi-dates-head { display: none; }
 }
 
 /* ── Preset button ── */
@@ -853,7 +872,7 @@ select {
     <div class="header-right">
       <button class="btn-cases" onclick="newCase()">＋ 新規作成</button>
       <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
-      <div class="header-badge">Ver. 3.24</div>
+      <div class="header-badge">Ver. 3.25</div>
     </div>
   </div>
 </header>
@@ -1045,14 +1064,18 @@ select {
 
         <!-- 指定複数日 -->
         <div id="date-multi" style="display:none;">
+          <div class="multi-dates-head">
+            <span>日付</span><span>開始時刻 〜 終了時刻</span><span></span><span></span><span></span>
+          </div>
           <div id="multi-dates-list"></div>
           <button type="button" class="btn-add-row" onclick="addMultiDate()">＋ 日付を追加</button>
+          <div style="font-size:0.74rem;color:var(--ink-light);margin-top:6px;">時刻が未入力の日は、下の「開始時刻／終了時刻」が共通の既定値として適用されます。</div>
         </div>
 
         <!-- 時刻・高度 -->
         <div class="field-row" style="margin-top:4px;">
           <div class="field-group">
-            <label class="field-label">開始時刻</label>
+            <label class="field-label">開始時刻 <span id="fly-time-common-hint" style="display:none;font-weight:400;font-size:0.74rem;color:var(--ink-light);">（指定複数日の共通既定値）</span></label>
             <input type="time" id="fly-start">
           </div>
           <div class="field-group">
@@ -1139,7 +1162,7 @@ select {
               <label class="check-item" id="safety-alt-item"><input type="checkbox" id="safety-alt-cb" value="飛行高度は150m未満"><span class="check-icon">✓</span><span id="safety-alt-label">飛行高度は150m未満</span></label>
               <label class="check-item"><input type="checkbox" value="第三者の頭上は飛ばさない"><span class="check-icon">✓</span>第三者の頭上は飛ばさない</label>
               <label class="check-item"><input type="checkbox" value="バッテリー残量30%で帰還"><span class="check-icon">✓</span>バッテリー残量30%で帰還</label>
-              <label class="check-item"><input type="checkbox" value="補助員1名の監視体制で実施"><span class="check-icon">✓</span>補助員1名の監視体制</label>
+              <label class="check-item" id="safety-assist-item"><input type="checkbox" id="safety-assist-cb" value="補助員1名の監視体制で実施"><span class="check-icon">✓</span>補助員<input type="number" id="safety-assist-num" min="1" max="99" value="1" onclick="event.stopPropagation()" oninput="syncAssistSafetyCheck()" onchange="event.stopPropagation();syncAssistSafetyCheck();updateProgress()" style="width:46px;margin:0 3px;padding:2px 4px;font-size:0.85rem;border:1px solid var(--border);border-radius:5px;">名の監視体制</label>
               <label class="check-item"><input type="checkbox" value="飛行前点検を実施"><span class="check-icon">✓</span>飛行前点検を実施</label>
               <label class="check-item"><input type="checkbox" value="強風時は飛行中止"><span class="check-icon">✓</span>強風時は飛行中止</label>
               <label class="check-item"><input type="checkbox" value="飛行区域を立入禁止に設定"><span class="check-icon">✓</span>飛行区域を立入禁止に設定</label>
@@ -1181,11 +1204,12 @@ select {
           <div id="pilots-list"></div>
         </div>
         <!-- 補助者 -->
-        <div class="field-row full">
-          <div class="field-group">
-            <label class="field-label">補助者氏名</label>
-            <input type="text" id="assist-name" placeholder="例：田中 翼">
-          </div>
+        <div style="margin-top:14px;">
+          <label class="field-label" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span>補助者氏名</span>
+            <button type="button" class="btn-add-row" onclick="addAssist()" style="margin:0;">＋ 補助者を追加</button>
+          </label>
+          <div id="assists-list"></div>
         </div>
         <!-- 機体リスト -->
         <div style="margin-top:14px;">
@@ -1571,14 +1595,19 @@ function setDateMode(mode) {
   if (mode === 'multi' && document.getElementById('multi-dates-list').children.length === 0) {
     addMultiDate();
   }
+  const hint = document.getElementById('fly-time-common-hint');
+  if (hint) hint.style.display = (mode === 'multi') ? '' : 'none';
   updateProgress();
 }
 
-function addMultiDate() {
+function addMultiDate(date='', start='', end='') {
   const list = document.getElementById('multi-dates-list');
   const row = document.createElement('div');
   row.className = 'multi-date-row';
-  row.innerHTML = `<input type="date" class="multi-date-input" onchange="updateProgress()">
+  row.innerHTML = `<input type="date" class="multi-date-input" value="${escAttr(date)}" onchange="updateProgress()">
+    <input type="time" class="multi-start-input" value="${escAttr(start)}" title="開始時刻" onchange="updateProgress()">
+    <span class="multi-time-sep">〜</span>
+    <input type="time" class="multi-end-input" value="${escAttr(end)}" title="終了時刻" onchange="updateProgress()">
     <button type="button" class="btn-remove-row" onclick="this.closest('.multi-date-row').remove();updateProgress()">✕</button>`;
   list.appendChild(row);
 }
@@ -1600,9 +1629,22 @@ function getFlyDateStr() {
     }
     return f ? fmtDate(f) : fmtDate(t);
   } else {
-    const dates = Array.from(document.querySelectorAll('.multi-date-input')).map(i => i.value).filter(Boolean);
-    if (!dates.length) return '—';
-    return dates.map(d => { const dt = new Date(d+'T00:00:00'); return `${dt.getMonth()+1}月${dt.getDate()}日`; }).join('、');
+    const commonStart = val('fly-start'), commonEnd = val('fly-end');
+    const entries = Array.from(document.querySelectorAll('.multi-date-row')).map(row => {
+      const dv = row.querySelector('.multi-date-input')?.value;
+      if (!dv) return null;
+      const dt = new Date(dv+'T00:00:00');
+      const ds = `${dt.getMonth()+1}月${dt.getDate()}日`;
+      const s = row.querySelector('.multi-start-input')?.value || commonStart;
+      const e = row.querySelector('.multi-end-input')?.value || commonEnd;
+      let t = '';
+      if (s && e) t = ` ${s}〜${e}`;
+      else if (s) t = ` ${s}〜`;
+      else if (e) t = ` 〜${e}`;
+      return ds + t;
+    }).filter(Boolean);
+    if (!entries.length) return '—';
+    return entries.join('<br>');
   }
 }
 
@@ -1708,6 +1750,41 @@ function getPilots() {
     cert: row.querySelector('.pilot-cert')?.value.trim() || '',
     tel:  row.querySelector('.pilot-tel')?.value.trim()  || ''
   }));
+}
+
+// ══════════════════════════════════════════════════════════
+//  補助者
+// ══════════════════════════════════════════════════════════
+let assistCount = 0;
+
+function addAssist(name='') {
+  assistCount++;
+  const list = document.getElementById('assists-list');
+  const row = document.createElement('div');
+  row.className = 'location-row';
+  row.innerHTML = `
+    <div class="location-row-inner">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="location-row-num">${list.children.length + 1}</span>
+        <input type="text" class="assist-name" placeholder="氏名　例：田中 翼" value="${escAttr(name)}" onchange="updateProgress()" style="flex:1;font-weight:600;">
+      </div>
+    </div>
+    <button type="button" class="btn-remove-row" onclick="this.closest('.location-row').remove();renumberAssists();updateProgress();" title="削除">✕</button>`;
+  list.appendChild(row);
+  renumberAssists();
+  updateProgress();
+}
+
+function renumberAssists() {
+  document.querySelectorAll('#assists-list .location-row').forEach((row, i) => {
+    const num = row.querySelector('.location-row-num');
+    if (num) num.textContent = i + 1;
+  });
+}
+
+// 補助者氏名の配列（空欄も含めて取得。出力側で空欄を除外）
+function getAssists() {
+  return Array.from(document.querySelectorAll('#assists-list .assist-name')).map(i => i.value.trim());
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1853,6 +1930,14 @@ function syncAltSafetyCheck() {
   if (lbl) lbl.textContent = text;
 }
 
+// 補助員人数と安全対策チェックの連動（チェックボックスのvalue文字列に人数を反映）
+function syncAssistSafetyCheck() {
+  let num = parseInt(document.getElementById('safety-assist-num')?.value, 10);
+  if (!Number.isFinite(num) || num < 1) num = 1;
+  const cb = document.getElementById('safety-assist-cb');
+  if (cb) cb.value = `補助員${num}名の監視体制で実施`;
+}
+
 // ══════════════════════════════════════════════════════════
 //  進捗バー
 // ══════════════════════════════════════════════════════════
@@ -1919,10 +2004,15 @@ function collectFormData() {
     data[key] = cb.checked;
   });
   data['__dateMode'] = currentDateMode;
-  data['__multiDates'] = Array.from(document.querySelectorAll('.multi-date-input')).map(i => i.value);
+  data['__multiDates'] = Array.from(document.querySelectorAll('.multi-date-row')).map(row => ({
+    date:  row.querySelector('.multi-date-input')?.value  || '',
+    start: row.querySelector('.multi-start-input')?.value || '',
+    end:   row.querySelector('.multi-end-input')?.value   || ''
+  }));
   data['__locations'] = getLocations();
   data['__drones'] = getDrones();
   data['__pilots'] = getPilots();
+  data['__assists'] = getAssists();
   return data;
 }
 
@@ -1952,6 +2042,8 @@ function restoreFormData(data) {
   }
   // 高度ラジオ復元後にチェックラベルを同期
   syncAltSafetyCheck();
+  // 補助員人数を復元後にチェックボックスのvalue文字列へ反映
+  syncAssistSafetyCheck();
   // value-based checkboxes
   document.querySelectorAll('.check-item input[type="checkbox"]').forEach(cb => {
     const key = 'cbval__' + cb.value;
@@ -1967,9 +2059,9 @@ function restoreFormData(data) {
     const list = document.getElementById('multi-dates-list');
     list.innerHTML = '';
     data['__multiDates'].forEach(d => {
-      addMultiDate();
-      const inputs = list.querySelectorAll('.multi-date-input');
-      inputs[inputs.length - 1].value = d;
+      // 旧形式（日付文字列）と新形式（{date,start,end}）の両対応
+      if (typeof d === 'string') addMultiDate(d);
+      else addMultiDate(d.date || '', d.start || '', d.end || '');
     });
   }
   // Locations
@@ -1996,6 +2088,17 @@ function restoreFormData(data) {
     data['__pilots'].forEach(p => addPilot(p.name||'', p.cert||'', p.tel||''));
   } else {
     addPilot();
+  }
+  // Assists（補助者）
+  const assistList = document.getElementById('assists-list');
+  assistList.innerHTML = ''; assistCount = 0;
+  if (Array.isArray(data['__assists']) && data['__assists'].length > 0) {
+    data['__assists'].forEach(name => addAssist(name || ''));
+  } else if (data['assist-name']) {
+    // 旧形式（単一の補助者氏名）を1件として復元
+    addAssist(data['assist-name']);
+  } else {
+    addAssist();
   }
   updateProgress();
 }
@@ -2173,7 +2276,7 @@ function updateCaseBar() {
 // ══════════════════════════════════════════════════════════
 const PRESET_FIELDS = {
   company_info:   ['company', 'contact-name', 'contact-tel'],
-  pilot_info:     ['assist-name'],   // __pilots saved separately
+  pilot_info:     [],                // __pilots / __assists saved separately
   drone_info:     [],                // __drones saved separately
   permit_info:    ['permit-num', 'permit-type', 'permit-start', 'permit-end', 'permit-area', 'category'],
   insurance_info: ['ins-company', 'ins-num', 'ins-end', 'ins-amount-person', 'ins-amount-thing'],
@@ -2252,6 +2355,16 @@ function applyPreset(id) {
     p.data['__pilots'].forEach(pilot => addPilot(pilot.name||'', pilot.cert||'', pilot.tel||''));
     if (list.children.length === 0) addPilot();
   }
+  if (p.type === 'pilot_info') {
+    const aList = document.getElementById('assists-list');
+    aList.innerHTML = ''; assistCount = 0;
+    if (Array.isArray(p.data['__assists']) && p.data['__assists'].length) {
+      p.data['__assists'].forEach(name => addAssist(name||''));
+    } else if (p.data['assist-name']) {
+      addAssist(p.data['assist-name']); // 旧形式の定型に対応
+    }
+    if (aList.children.length === 0) addAssist();
+  }
   if (p.type === 'drone_info' && p.data['__drones']) {
     const list = document.getElementById('drones-list');
     list.innerHTML = ''; droneCount = 0;
@@ -2270,7 +2383,7 @@ function saveNewPreset() {
   const fields = PRESET_FIELDS[type] || [];
   const data = {};
   fields.forEach(k => { const el = document.getElementById(k); if (el) data[k] = el.value; });
-  if (type === 'pilot_info') data['__pilots'] = getPilots();
+  if (type === 'pilot_info') { data['__pilots'] = getPilots(); data['__assists'] = getAssists(); }
   if (type === 'drone_info') data['__drones'] = getDrones();
   _pendingPresetData = { type, data };
   const suggested = type === 'pilot_info'
@@ -2336,6 +2449,9 @@ function clearFormSilent() {
   // 飛行高度ラジオをデフォルト（地表から）に戻してチェック連動も更新
   document.getElementById('fly-alt-type-ground').checked = true;
   syncAltSafetyCheck();
+  // 補助員人数をデフォルト（1名）に戻してvalue文字列を確定
+  document.getElementById('safety-assist-num').value = '1';
+  syncAssistSafetyCheck();
   // 安全対策デフォルトチェック（syncAltSafetyCheck()後に実行してvalue文字列を確定させる）
   const _defSafety = ['飛行高度は地表から150m未満','第三者の頭上は飛ばさない','バッテリー残量30%で帰還','飛行前点検を実施','強風時は飛行中止'];
   document.querySelectorAll('#safety-checks input[type="checkbox"]').forEach(cb => {
@@ -2352,6 +2468,8 @@ function clearFormSilent() {
   droneList.innerHTML = ''; droneCount = 0; addDrone();
   const pilotList = document.getElementById('pilots-list');
   pilotList.innerHTML = ''; pilotCount = 0; addPilot();
+  const assistList = document.getElementById('assists-list');
+  assistList.innerHTML = ''; assistCount = 0; addAssist();
   updateProgress();
 }
 
@@ -2377,7 +2495,9 @@ function buildDocData() {
     shootMethod: getChecked('shoot-method-checks'),
     shootTarget: val('shoot-target') || '—',
     flyDate:     getFlyDateStr(),
-    flyTime:     (val('fly-start') && val('fly-end')) ? val('fly-start') + ' 〜 ' + val('fly-end') : '—',
+    flyTime:     currentDateMode === 'multi'
+                   ? '各飛行予定日に記載'
+                   : ((val('fly-start') && val('fly-end')) ? val('fly-start') + ' 〜 ' + val('fly-end') : '—'),
     flyBackup:   (val('fly-backup')||val('fly-backup-range')) ? fmtDate(val('fly-backup')||val('fly-backup-range')) : '予備日設定なし',
     flyAlt:      (() => { const t = document.querySelector('input[name="fly-alt-type"]:checked')?.value || '地表'; const n = (document.getElementById('fly-alt-num')?.value || '').trim(); return n ? `${t}から${n}m未満` : '—'; })(),
     locations:   (() => {
@@ -2397,7 +2517,7 @@ function buildDocData() {
     safetyNote:  val('safety-note'),
     drones,
     pilots,
-    assistName:  val('assist-name') || '—',
+    assistName:  (() => { const a = getAssists().filter(Boolean); return a.length ? a.join('、') : '—'; })(),
     permitNum:   val('permit-num') || '—',
     permitType:  val('permit-type') || '—',
     permitPeriod: (val('permit-start') && val('permit-end')) ? fmtDate(val('permit-start')) + ' 〜 ' + fmtDate(val('permit-end')) : '—',
@@ -2952,6 +3072,7 @@ window.onload = function() {
 
   // 安全対策デフォルトチェック（先にvalue文字列を確定させる）
   syncAltSafetyCheck();
+  syncAssistSafetyCheck();
   const defaultSafety = ['飛行高度は地表から150m未満','第三者の頭上は飛ばさない','バッテリー残量30%で帰還','飛行前点検を実施','強風時は飛行中止'];
   document.querySelectorAll('#safety-checks input[type="checkbox"]').forEach(cb => {
     if (defaultSafety.includes(cb.value)) {
@@ -2964,6 +3085,7 @@ window.onload = function() {
   if (document.getElementById('locations-list').children.length === 0) addLocation();
   if (document.getElementById('drones-list').children.length === 0) addDrone();
   if (document.getElementById('pilots-list').children.length === 0) addPilot();
+  if (document.getElementById('assists-list').children.length === 0) addAssist();
 
   // 許可書PDF読み込みリスナー
   document.getElementById('permit-pdf-input').addEventListener('change', _handlePermitPdfChange);
@@ -2982,6 +3104,7 @@ window.onload = function() {
   // ボタンはinline onclickで処理済み、リスナー不要
 
   syncAltSafetyCheck();
+  syncAssistSafetyCheck();
   updateProgress();
 };
 </script>
