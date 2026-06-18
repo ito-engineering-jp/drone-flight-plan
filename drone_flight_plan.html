@@ -872,7 +872,7 @@ select {
     <div class="header-right">
       <button class="btn-cases" onclick="newCase()">＋ 新規作成</button>
       <button class="btn-cases" onclick="openCasePanel()">📁 案件管理</button>
-      <div class="header-badge">Ver. 3.26</div>
+      <div class="header-badge">Ver. 3.27</div>
     </div>
   </div>
 </header>
@@ -1376,6 +1376,28 @@ select {
       </div>
     </div>
 
+    <!-- S9: 添付書類 -->
+    <div class="section-card" id="s9">
+      <div class="section-header">
+        <div class="section-num">9</div>
+        <div class="section-header-text">
+          <div class="section-title-row">
+            <div class="section-title">添付書類</div>
+          </div>
+          <div class="section-subtitle">PDF出力の末尾に画像・PDFを追加（案件には保存されません）</div>
+        </div>
+      </div>
+      <div class="section-body">
+        <label class="field-label" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span>添付ファイル（画像・PDF）</span>
+          <button type="button" class="btn-add-row" onclick="document.getElementById('attach-file-input').click()" style="margin:0;">＋ ファイルを追加</button>
+        </label>
+        <input type="file" id="attach-file-input" accept="image/*,application/pdf" multiple style="display:none" onchange="handleAttachFiles(this.files); this.value='';">
+        <div id="attachments-list"></div>
+        <div id="attachments-empty" style="font-size:0.8rem;color:var(--ink-light);">まだ添付がありません。画像（PNG/JPG）またはPDFを追加できます。出力したPDFの末尾に、追加した順で1ファイルずつ新しいページとして付きます。</div>
+      </div>
+    </div>
+
     <!-- Action bar -->
     <div class="actions-bar">
       <button class="btn btn-secondary" onclick="resetForm()">🗑 リセット</button>
@@ -1788,6 +1810,104 @@ function getAssists() {
 }
 
 // ══════════════════════════════════════════════════════════
+//  添付書類（PDF出力時のみ反映。localStorage・案件には保存しない）
+// ══════════════════════════════════════════════════════════
+let _attachments = []; // {id, name, type:'image'|'pdf', dataUrl}
+
+function handleAttachFiles(fileList) {
+  Array.from(fileList || []).forEach(file => {
+    const isImage = file.type.startsWith('image/');
+    const isPdf   = file.type === 'application/pdf';
+    if (!isImage && !isPdf) {
+      showToast(`未対応のファイル形式です: ${file.name}`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => {
+      _attachments.push({
+        id: 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        name: file.name,
+        type: isImage ? 'image' : 'pdf',
+        dataUrl: e.target.result
+      });
+      renderAttachments();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removeAttachment(id) {
+  _attachments = _attachments.filter(a => a.id !== id);
+  renderAttachments();
+}
+
+function renderAttachments() {
+  const list = document.getElementById('attachments-list');
+  const empty = document.getElementById('attachments-empty');
+  if (!list) return;
+  list.innerHTML = '';
+  _attachments.forEach((a, i) => {
+    const row = document.createElement('div');
+    row.className = 'location-row';
+    const icon = a.type === 'image' ? '🖼' : '📄';
+    row.innerHTML = `
+      <div class="location-row-inner" style="flex-direction:row;align-items:center;gap:8px;">
+        <span class="location-row-num">${i + 1}</span>
+        <span style="flex:1;font-weight:600;word-break:break-all;">${icon} ${escHtml(a.name)}</span>
+        <span style="font-size:0.78rem;color:var(--ink-light);">${a.type === 'image' ? '画像' : 'PDF'}</span>
+      </div>
+      <button type="button" class="btn-remove-row" onclick="removeAttachment('${a.id}')" title="削除">✕</button>`;
+    list.appendChild(row);
+  });
+  if (empty) empty.style.display = _attachments.length ? 'none' : '';
+}
+
+// DataURL → Uint8Array（pdf.jsへ渡す用）
+function _dataUrlToUint8(dataUrl) {
+  const base64 = dataUrl.split(',')[1] || '';
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+// 添付書類を印刷用DOMの末尾に追加（各ファイル・各PDFページを新ページとして追加）
+async function appendAttachmentsToPrint(printDiv) {
+  if (!_attachments.length) return;
+  for (const a of _attachments) {
+    if (a.type === 'image') {
+      const wrap = document.createElement('div');
+      wrap.className = 'print-attachment';
+      wrap.innerHTML = `<img src="${a.dataUrl}" alt="${escAttr(a.name)}">`;
+      printDiv.appendChild(wrap);
+      const img = wrap.querySelector('img');
+      await new Promise(res => { if (img.complete) res(); else { img.onload = res; img.onerror = res; } });
+    } else {
+      // PDF: pdf.jsで各ページをcanvasに描画 → 画像化して追加
+      if (typeof pdfjsLib === 'undefined') { showToast('PDF表示ライブラリが未読み込みのため添付PDFを処理できません'); continue; }
+      try {
+        const pdf = await pdfjsLib.getDocument({ data: _dataUrlToUint8(a.dataUrl) }).promise;
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page = await pdf.getPage(p);
+          const viewport = page.getViewport({ scale: 2 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          const wrap = document.createElement('div');
+          wrap.className = 'print-attachment';
+          wrap.innerHTML = `<img src="${canvas.toDataURL('image/png')}" alt="${escAttr(a.name)} p${p}">`;
+          printDiv.appendChild(wrap);
+        }
+      } catch (e) {
+        console.error('添付PDFの処理に失敗', e);
+        showToast(`添付PDFの処理に失敗しました: ${a.name}`);
+      }
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════
 //  使用機体
 // ══════════════════════════════════════════════════════════
 let droneCount = 0;
@@ -2019,6 +2139,8 @@ function collectFormData() {
 // フォームデータ復元
 function restoreFormData(data) {
   if (!data) return;
+  // 添付書類は案件に保存されないため、案件を開くたびにクリア
+  _attachments = []; renderAttachments();
   // Simple fields
   Object.entries(data).forEach(([k, v]) => {
     if (k.startsWith('__') || k.startsWith('cbval__') || k.startsWith('cb__') || k.startsWith('rad__')) return;
@@ -2470,6 +2592,8 @@ function clearFormSilent() {
   pilotList.innerHTML = ''; pilotCount = 0; addPilot();
   const assistList = document.getElementById('assists-list');
   assistList.innerHTML = ''; assistCount = 0; addAssist();
+  // 添付書類クリア
+  _attachments = []; renderAttachments();
   updateProgress();
 }
 
@@ -2687,6 +2811,8 @@ function generatePDF() {
     #print-target { position:static!important; top:auto!important; left:auto!important; width:100%!important; padding:0!important; z-index:auto!important; }
     @page { size: A4; margin: 12mm 10mm; }
     .print-loc-block { page-break-inside: avoid; }
+    .print-attachment { page-break-before: always; text-align: center; }
+    .print-attachment img { max-width: 100%; max-height: 252mm; }
   }`;
   document.head.appendChild(style);
 
@@ -2725,16 +2851,18 @@ function generatePDF() {
   const origTitle = document.title;
   document.title = 'ドローン飛行計画書_' + d.docNum;
 
-  Promise.all(tileLoadPromises).then(() => {
-    setTimeout(() => {
-      window.print();
-      document.title = origTitle;
-      printMapInstances.forEach(m => { try { m.remove(); } catch(e) {} });
-      document.body.removeChild(printDiv);
-      document.head.removeChild(style);
-      showToast('印刷ダイアログから「PDFに保存」を選択してください');
-    }, 500);
-  });
+  Promise.all(tileLoadPromises)
+    .then(() => appendAttachmentsToPrint(printDiv))
+    .then(() => {
+      setTimeout(() => {
+        window.print();
+        document.title = origTitle;
+        printMapInstances.forEach(m => { try { m.remove(); } catch(e) {} });
+        document.body.removeChild(printDiv);
+        document.head.removeChild(style);
+        showToast('印刷ダイアログから「PDFに保存」を選択してください');
+      }, 500);
+    });
 }
 
 function _buildStaticMap(coords, num) {
